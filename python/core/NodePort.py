@@ -289,18 +289,3 @@ class OutputControlPort(ControlPort):
         self.outgoing_connections = []
 
 
-"""
-class Connection:
-    def __init__(self, from_node, from_port, to_node, to_port):
-        # Store IDs for Arena pattern, but keep object refs for now to pass existing tests
-        # or update them. The prompt asks to "convert".
-        self.from_node = from_node # Keep for now as legacy support if needed, or remove?
-        self.to_node = to_node     
-        
-        # New Arena fields
-        self.from_node_id = from_node.id if hasattr(from_node, 'id') else str(from_node)
-        self.to_node_id = to_node.id if hasattr(to_node, 'id') else str(to_node)
-        
-        self.from_port = from_port
-        self.to_port = to_port
-        """
