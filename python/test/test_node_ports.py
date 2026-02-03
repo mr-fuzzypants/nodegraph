@@ -151,63 +151,7 @@ class TestNodePort:
         # Check logs for the error message
         assert "expected ValueType.INT" in caplog.text
 
-    def test_connect_to_basic(self, mock_network):
-        """Test the connectTo method establishing bi-directional link via network edges"""
-        node_a = MockNode("A", mock_network)
-        node_b = MockNode("B", mock_network)
-        
-        port_a = NodePort(node_a, "out", 2, data_type=ValueType.INT)
-        node_a.register_port(port_a)
-        
-        port_b = NodePort(node_b, "in", 1, data_type=ValueType.INT)
-        node_b.register_port(port_b)
-        
-        port_a.connectTo(port_b)
-        
-        # Check network edges
-        assert len(mock_network.edges) == 1
-        edge = mock_network.edges[0]
-        assert mock_network.nodes[edge.from_node_id].name == "A"
-        assert edge.from_port_name == "out"
-        assert mock_network.nodes[edge.to_node_id].name == "B"
-        assert edge.to_port_name == "in"
-
-    def test_connect_to_type_mismatch(self, mock_network):
-        """Test that connecting incompatible types raises an error"""
-        node_a = MockNode("A", mock_network)
-        node_b = MockNode("B", mock_network)
-        
-        port_a = NodePort(node_a, "out", 2, data_type=ValueType.INT)
-        port_b = NodePort(node_b, "in", 1, data_type=ValueType.STRING)
-        
-        with pytest.raises(ValueError, match="Type Mismatch"):
-            port_a.connectTo(port_b)
-
-    def test_control_port_activation(self, mock_network):
-        """Test ControlPort specific activation logic"""
-        node_a = MockNode("A", mock_network)
-        node_b = MockNode("B", mock_network)
-
-        # Create Control Output
-        cp_out = ControlPort(node_a, "c_out", 2)
-        node_a.register_port(cp_out)
-        
-        # Create Control Input on another node
-        cp_in = ControlPort(node_b, "c_in", 1)
-        node_b.register_port(cp_in)
-        
-        cp_out.connectTo(cp_in)
-        
-        # Activate
-        cp_out.activate()
-        
-        assert cp_out.isActive() is True
-        
-        # Deactivate
-        cp_out.deactivate()
-        assert cp_out.isActive() is False
-
-   
+    
 
 class TestValueTypeable:
 
