@@ -88,14 +88,8 @@ ANY_PORT = 2
 # Legacy Alias
 DataType = ValueType
 
-class Connection:
-    # Legacy connection class retained for temporary compatibility if needed by external scripts,
-    # but the core logic now avoids using it.
-    def __init__(self, from_node, from_port, to_node, to_port):
-        self.from_node = from_node
-        self.from_port = from_port
-        self.to_node = to_node
-        self.to_port = to_port
+
+
         
 class NodePort:
     def __init__(self, 
@@ -140,14 +134,6 @@ class NodePort:
 
     def isDirty(self) -> bool:
         return self._isDirty
-
-
-    def addIncomingConnection(self, connection: 'Connection'):
-        self.incoming_connections.append(connection)
-
-    def addOutgoingConnection(self, connection: 'Connection'):
-        self.outgoing_connections.append(connection)
-
 
   
     def isDataPort(self) -> bool:
@@ -251,10 +237,7 @@ class ControlPort(NodePort):
        
     
     def deactivate(self):
-        #for connection in self.connections:
-        #    to_port = connection.to_port
-        #    to_port.setValue(False)
-        # Placeholder for deactivating control port
+     
         logger.debug(f"Deactivating control port {self.port_name} on node {self.node.id}")
         self.setValue(False)
 
