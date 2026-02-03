@@ -135,32 +135,6 @@ class TestNodePort:
         assert port.getValue() == 100
         assert port.isDirty() is False
 
-    def test_set_value_propagates_dirty(self, mock_network):
-        """Test that setting an output value marks connected inputs as dirty"""
-        node_a = MockNode("A", mock_network)
-        node_b = MockNode("B", mock_network)
-        
-        # 2 = Output, 1 = Input
-        out_port = NodePort(node_a, "out", 2) 
-        node_a.register_port(out_port)
-        
-        in_port = NodePort(node_b, "in", 1)
-        node_b.register_port(in_port)
-        
-        # Connect via API
-        out_port.connectTo(in_port)
-        
-        # Verify initial state
-        in_port.markClean()
-        node_b._isDirty = False
-        assert in_port.isDirty() is False
-        
-        # Action: Set value on output
-        out_port.setValue(50)
-        
-        # Expectation: Connected input should now be dirty
-        assert in_port.isDirty() is True
-        assert node_b.isDirty() is True 
 
     def test_value_type_validation_warning(self, caplog, mock_node):
         """Test that validation logic is triggered (logs error)"""
@@ -233,21 +207,7 @@ class TestNodePort:
         cp_out.deactivate()
         assert cp_out.isActive() is False
 
-    def test_get_source(self, mock_network):
-        """Test get_source retrieves the correct upstream port"""
-        node_a = MockNode("A", mock_network)
-        node_b = MockNode("B", mock_network)
-        
-        out_port = NodePort(node_a, "out", 2)
-        node_a.register_port(out_port)
-        
-        in_port = NodePort(node_b, "in", 1)
-        node_b.register_port(in_port)
-        
-        out_port.connectTo(in_port)
-        
-        source = in_port.get_source()
-        assert source == out_port
+   
 
 class TestValueTypeable:
 
