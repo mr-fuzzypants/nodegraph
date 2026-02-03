@@ -157,7 +157,11 @@ class NodePort:
         return self.direction == PortDirection.INPUT_OUTPUT
     
 
+    # TDOD: implement connection management and type checking higher up in the
+    # network layer?
+    """
     def connectTo(self, other_port: 'NodePort'):
+
 
         logger.debug(f"Connecting port '{self.port_name}' on node '{self.node}' to port '{other_port.port_name}' on node '{other_port.node}'")
       
@@ -185,7 +189,7 @@ class NodePort:
         return None # connection removed
 
         # Note: Removing runtime value check here, it should be in setValue
-        
+    """ 
     
     # TODO: should this be the default implmentation?
     def setValue(self, value: Any):
@@ -285,7 +289,7 @@ class OutputControlPort(ControlPort):
         self.outgoing_connections = []
 
 
-
+"""
 class Connection:
     def __init__(self, from_node, from_port, to_node, to_port):
         # Store IDs for Arena pattern, but keep object refs for now to pass existing tests
@@ -299,3 +303,4 @@ class Connection:
         
         self.from_port = from_port
         self.to_port = to_port
+        """
