@@ -100,7 +100,7 @@ class TestNodePort:
         """Test basic initialization of NodePort"""
         port = NodePort(mock_node, "test_port", 1)  # 1 = PORT_TYPE_INPUT
         
-        assert port.node == mock_node
+        assert port.node_id == mock_node.id
         assert port.port_name == "test_port"
         assert port.data_type == ValueType.ANY
         assert port.direction == PortDirection.INPUT

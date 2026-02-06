@@ -27,10 +27,13 @@ class CookingTestNode(Node):
     async def compute(self, executionContext=None):
         assert(executionContext is not None), "Execution context must be provided"
         global EXECUTION_LOG
-        EXECUTION_LOG.append(NodeNetwork.id_to_node(self.get_path()).name)
+
+        # TODO: we should be passing in the node name to the conext
+        node = self.network.find_node_by_id(executionContext["node_id"])
+        EXECUTION_LOG.append(node.name)
         self.compute_count += 1
 
-        result = ExecutionResult(ExecCommand.CONTINUE, [])
+        result = ExecutionResult(ExecCommand.CONTINUE)
         result.network_id = executionContext["network_id"] 
         result.node_id = executionContext["node_id"] 
         result.node_path = executionContext["node_path"] 
@@ -44,7 +47,7 @@ class TestNodeCooking:
     def setup_method(self):
         global EXECUTION_LOG
         EXECUTION_LOG.clear()
-        NodeNetwork.all_nodes.clear()
+        NodeNetwork.deleteAllNodes()
 
     def teardown_method(self):
         # Stub: Cleanup logic here
@@ -55,12 +58,17 @@ class TestNodeCooking:
         Structural: A -> B
         Goal: cook_data_nodes(B) should trigger A then B.
         """
-        net = NodeNetwork("net_linear", None)
+        #net = NodeNetwork("net_linear", None)
+        net = NodeNetwork.createRootNetwork("net_linear", "NodeNetworkSystem")
         node_a = net.createNode("A", "CookingTestNode")
         node_b = net.createNode("B", "CookingTestNode")
         
+        #NOTE: DO NOT USE EDGE ADDING HELPERS HERE, THEY MAY SKIP INTERNAL LOGIC
         # Connect A.out -> B.in
-        net.add_edge("A", "out", "B", "in")
+        #net.add_edge("A", "out", "B", "in")
+        net.connectNodes("A", "out", "B", "in")
+
+        assert net.get_incoming_edges(node_b.id, "in"), "Node B should have incoming edges"
         
         # Action
         asyncio.run(net.cook_data_nodes(node_b))
@@ -82,25 +90,34 @@ class TestNodeCooking:
              
         Goal: cook_data_nodes(D) -> Toposort: A, {B,C}, D
         """
-        net = NodeNetwork("net_diamond", None)
+        #net = NodeNetwork("net_diamond", None)
+        net = NodeNetwork.createRootNetwork("net_diamond", "NodeNetworkSystem")
         node_a = net.createNode("A", "CookingTestNode")
         node_b = net.createNode("B", "CookingTestNode")
         node_c = net.createNode("C", "CookingTestNode")
         node_d = net.createNode("D", "CookingTestNode")
         
-        net.add_edge("A", "out", "B", "in")
-        net.add_edge("A", "out", "C", "in")
-        net.add_edge("B", "out", "D", "in")
-        net.add_edge("C", "out", "D", "in")
+        net.connectNodes("A", "out", "B", "in")
+        net.connectNodes("A", "out", "C", "in")
+        net.connectNodes("B", "out", "D", "in")
+        
+        # we do not allow multiplte edges to the same port in this model
+        with pytest.raises(ValueError):
+            net.connectNodes("C", "out", "D", "in")
+
+        # NOTE: do not use edge adding helpers here, they may skip internal logic
+        #net.add_edge("A", "out", "B", "in")
+        #net.add_edge("A", "out", "C", "in")
+        #net.add_edge("B", "out", "D", "in")
+        #net.add_edge("C", "out", "D", "in")
         
         asyncio.run(net.cook_data_nodes(node_d))
         #asyncio.run(net.cook_flow_control_nodes(node_d))
-        
-        assert len(EXECUTION_LOG) == 4
+        assert len(EXECUTION_LOG) == 3
         assert EXECUTION_LOG[0] == "A"
         assert EXECUTION_LOG[-1] == "D"
         assert "B" in EXECUTION_LOG
-        assert "C" in EXECUTION_LOG
+        #assert "C" in EXECUTION_LOG
 
     def test_cook_fan_in(self):
         """
@@ -109,18 +126,25 @@ class TestNodeCooking:
                 C
            B --\
         """
-        net = NodeNetwork("net_fanin", None)
+        net = NodeNetwork.createRootNetwork("net_fanin", "NodeNetworkSystem")
         node_a = net.createNode("A", "CookingTestNode")
         node_b = net.createNode("B", "CookingTestNode")
         node_c = net.createNode("C", "CookingTestNode")
         
-        net.add_edge("A", "out", "C", "in")
-        net.add_edge("B", "out", "C", "in")
+        net.connectNodes("A", "out", "C", "in")
+
+        # we do not allow multiplte edges to the same port in this model
+        with pytest.raises(ValueError):
+            net.connectNodes("B", "out", "C", "in")
+        # NOTE: do not use edge adding helpers here, they may skip internal logic
+        #
+        #net.add_edge("A", "out", "C", "in")
+        #net.add_edge("B", "out", "C", "in")
         
         asyncio.run(net.cook_data_nodes(node_c))
         
         assert "A" in EXECUTION_LOG
-        assert "B" in EXECUTION_LOG
+        #assert "B" in EXECUTION_LOG
         assert EXECUTION_LOG[-1] == "C"
 
     def test_cook_disconnected(self):
@@ -128,7 +152,8 @@ class TestNodeCooking:
         Structural: A   B
         Cook B. A should remain untouched.
         """
-        net = NodeNetwork("net_dis", None)
+        #net = NodeNetwork("net_dis", None)
+        net = NodeNetwork.createRootNetwork("net_dis", "NodeNetworkSystem")
         node_a = net.createNode("A", "CookingTestNode")
         node_b = net.createNode("B", "CookingTestNode")
         
@@ -141,13 +166,17 @@ class TestNodeCooking:
         """
         A -> B -> C
         """
-        net = NodeNetwork("net_chain3", None)
+        #net = NodeNetwork("net_chain3", None)
+        net = NodeNetwork.createRootNetwork("net_chain3", "NodeNetworkSystem")
         a = net.createNode("A", "CookingTestNode")
         b = net.createNode("B", "CookingTestNode")
         c = net.createNode("C", "CookingTestNode")
         
-        net.add_edge("A", "out", "B", "in")
-        net.add_edge("B", "out", "C", "in")
+        net.connectNodes("A", "out", "B", "in")
+        net.connectNodes("B", "out", "C", "in")
+        # NOTE: do not use edge adding helpers here, they may skip internal logic
+        #net.add_edge("A", "out", "B", "in")
+        #net.add_edge("B", "out", "C", "in")
         
         asyncio.run(net.cook_data_nodes(c))
         #asyncio.run(net.cook_flow_control_nodes(c))
