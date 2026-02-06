@@ -197,7 +197,7 @@ class TestNodeNetwork:
         assert len(net.graph.edges) == 1
         
         net.deleteNode("A")
-        network_path = net.get_path()
+        network_path = net.graph.get_path(net.id)
         assert net.get_node_by_path(f"{network_path}:A") is None
         
         # Verify connections cleanup    
