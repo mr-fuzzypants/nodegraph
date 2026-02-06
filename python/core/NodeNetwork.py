@@ -867,21 +867,21 @@ class NodeNetwork(Node):
         #assert(False), "propogate_internal_node_outputs_to_network not fully implemented yet. Need to determine which internal nodes are connected to the network outputs and in what order to propogate values. For now, this function is not called."
         for port_name, port in network_node.outputs.items():
             #TODO: double check logic here. do we need to check if it's a data port?
-            if port.isDataPort(): 
-                # Look for edges coming INTO the subnet output from INSIDE
-                # Connection direction: InternalNode.Out -> Subnet.Out (as Input to Subnet Node from inside)
-                edges = self.get_incoming_edges(network_node.id, port_name)
-                for edge in edges:
-                    source_node = self.get_node_by_id(edge.from_node_id)
-                    if source_node:
-                         val = None
-                         if edge.from_port_name in source_node.outputs:
-                             val = source_node.outputs[edge.from_port_name].value
-                         elif edge.from_port_name in source_node.inputs:
-                             val = source_node.inputs[edge.from_port_name].value
-                         
-                         if val is not None:
-                             port.value = val
+            #if port.isDataPort(): 
+            # Look for edges coming INTO the subnet output from INSIDE
+            # Connection direction: InternalNode.Out -> Subnet.Out (as Input to Subnet Node from inside)
+            edges = self.get_incoming_edges(network_node.id, port_name)
+            for edge in edges:
+                source_node = self.get_node_by_id(edge.from_node_id)
+                if source_node:
+                        val = None
+                        if edge.from_port_name in source_node.outputs:
+                            val = source_node.outputs[edge.from_port_name].value
+                        elif edge.from_port_name in source_node.inputs:
+                            val = source_node.inputs[edge.from_port_name].value
+                        
+                        if val is not None:
+                            port.value = val
 
 
     async def cook_flow_control_nodes(self, node: Node, execution_stack: List[str]=None, pending_stack: Dict[str, List[str]]=None )-> None:
