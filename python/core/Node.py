@@ -38,8 +38,8 @@ class ExecutionResult:
     """
     def __init__(self, command: ExecCommand,  control_outputs: Optional[Dict[str, Any]] = None):
         self.command = command
-        self.next_nodes = [] #next_nodes if next_nodes is not None else []
-        self.next_node_ids = [] #next_node_ids if next_node_ids is not None else []
+        #self.next_nodes = [] #next_nodes if next_nodes is not None else []
+        #self.next_node_ids = [] #next_node_ids if next_node_ids is not None else []
         self.network_id= ""
         self.node_id = ""
         self.node_path = ""
@@ -203,38 +203,7 @@ class Node(ABC):
 
         self.path= " path node computed at runtime " # This is a bit of a hack, but it allows us to have a path property that is computed at runtime based on the network structure. In Rust/TS, we can compute this on demand or cache it as needed.
 
-    """
-    # TODO: why am I setting network here?
-    # 
-    #def set_network(self, network):
-    #    raise ValueError(f"Node '{self.id}' is already part of a network. Reassigning networks is not supported.")
-    #    self.network = network
-    #    #self.path = f"{self.network.path}:{self.id}" if self.network else self.id  
-    
-    """
- 
-
-    # moved to graph
-    def get_path(self) -> str:
-        
-        path_elements = []
-        cur_parent =self.network
-        #cur_parent = self.getNetwork()
-        while cur_parent:
-            path_elements.append(cur_parent.name)
-            cur_parent = cur_parent.network
-            #cur_parent = cur_parent.getNetwork() 
-        
-        path_elements.reverse()
-        full_path = "/" + "/".join(path_elements)
-        if self.isNetwork():
-            full_path += f"/{self.name}"
-        else:
-            full_path += f":{self.name}"
-
-        if full_path.startswith("//"):
-            full_path = full_path[1:]   
-        return full_path
+   
 
     def isNetwork(self) -> bool:
         return False
@@ -379,112 +348,6 @@ class Node(ABC):
         
         return port
 
-    """
-    Not Using?
-    def is_connected(self, port_name: str, is_input: bool = True) -> bool:
-        raise(False)
-        port = self.inputs.get(port_name) if is_input else self.outputs.get(port_name)
-        if not port:
-            raise ValueError(f"Port '{port_name}' not found in node '{self.id}'")
-        
-        if is_input:
-            # was ():
-            #return len(port.incoming_connections) > 0
-            return len(self.network.get_incoming_edges(self.id, port.port_name)) > 0 
-        else:
-            # was:
-            #return len(port.outgoing_connections) > 0
-            return len(self.network.get_outgoing_edges(self.id, port.port_name)) > 0
-
-    """          
-
-    # Removed get_source_nodes / get_target_nodes logic that relies on object traversal
-    # In Rust/TS, you'd query the Graph/Network with the connection IDs. 
-    # For now, leaving simple accessors if necessary:
-    # def get_source_nodes(self, port_name): ...
-    """"
-    MOVED to network
-    # not currenty being used, but will be needed.
-    def can_connect_output_to(self, from_port_name: str, other_node: 'Node', to_port_name: str) -> bool:
-        #assert(False), "CAN CONNECT OUTPUT TO NOT USED ANYMORE"
-        from_port = self.outputs.get(from_port_name)
-        to_port = other_node.inputs.get(to_port_name)
-
-        if not from_port:
-            raise ValueError(f"Output port '{from_port_name}' not found in node '{self.id}'")
-        if not to_port:
-            raise ValueError(f"Input port '{to_port_name}' not found in node '{other_node.id}'")
-        
-        # Identity check using IDs for portability
-        if from_port.node_id == other_node.id:
-            return False
-        
-        return True
-
-    """
-    """
-    def connect_output_to(self, from_port_name: str, other_node: 'Node', to_port_name: str):
-        #assert(False)
-        from_port = self.outputs.get(from_port_name)
-        to_port = other_node.inputs.get(to_port_name)
-
-        print("CONNECTING NODES:", self.name, from_port_name,"->", other_node.name, to_port_name)
-        if not to_port:
-            print("TO PORT NOT FOUND")
-            print(". from Input Ports:", self.inputs.keys())
-            print(". from Output Ports:", self.outputs.keys())
-            print(". other Node Input Ports:", other_node.inputs.keys())
-            print(". other Node Output Ports:", other_node.outputs.keys())
-            if self.network_id == other_node.id:
-                to_port = other_node.outputs.get(to_port_name)
-
-       
-        if not from_port:
-            print("FROM PORT NOT FOUND", self.isNetwork(), self.id, other_node.network_id)
-            print(". from Input Ports:", self.inputs.keys())
-            print(". from Output Ports:", self.outputs.keys())
-            print(". other Node Input Ports:", other_node.inputs.keys())
-            print(". other Node Output Ports:", other_node.outputs.keys())
-            if self.id == other_node.network_id:
-                from_port = self.inputs.get(from_port_name)
-            else:
-                assert(False), "FROM PORT STILL NOT FOUND"
-
-        if not from_port:
-            raise ValueError(f"Output port '{from_port_name}' not found in node '{self.name}'")
-        if not to_port:
-            raise ValueError(f"Input port '{to_port_name}' not found in node '{other_node.name}'")
-        
-        if from_port.node_id == other_node.id:
-            raise ValueError("Cannot connect a node's output to its own input")
-        
-        # --- NEW ARENA LOGIC ---
-        #if self.network is None:
-        #     raise RuntimeError(f"Node '{self.id}' is not in a network. Add it to a network before connecting.")
-        
-        #if other_node.network != self.network:
-        #     raise RuntimeError(f"Nodes '{self.id}' and '{other_node.id}' are not in the same network.")
-
-
-        existing_connections = self.network.get_incoming_edges(other_node.id, to_port_name)
-        print("  ->Existing Connections on", other_node.name, to_port_name, ":", len(existing_connections))
-        if existing_connections:
-            if to_port.isInputOutputPort() or from_port.isInputOutputPort():
-                #TODO: what is this case?
-                # allow multiple connections for input/output ports
-                pass
-            else:
-                raise ValueError(f"Error: Input port '{to_port_name}' on node '{other_node.id}' is already connected")
-        
-        
-        #return from_port.connectTo(to_port)
-        edge = self.network.add_edge(self.id, from_port_name, other_node.id, to_port_name)
-
-        existing_connections = self.network.get_incoming_edges(other_node.id, to_port_name)
-        print("  POST ADD Connections on", other_node.name, other_node.id, to_port_name, ":", len(existing_connections))
-        print(".    -- networkId:", self.network_id)
-        return edge
-    """
 
     # TODO: precompute should not compute inputs. this should be done in compute() and this should be a callback only
     def precompute(self):
@@ -534,19 +397,6 @@ class Node(ABC):
         for output_port in self.get_output_data_ports():
             print(f".       Output Port [{output_port.port_name}] dirty: {output_port.isDirty()}; value: {output_port.value}")
     
-    """
-    NOT Using?
-    def _get_nodes_from_port(self, port: NodePort) -> List['Node']:
-        nodes = []
-        # Support both output ports and input/output ports acting as outputs
-        if self.network:
-             outgoing_edges = self.network.get_outgoing_edges(self.id, port.port_name)
-             for edge in outgoing_edges:
-                 node = self.network.get_node_by_id(edge.to_node_id)
-                 if node:
-                     nodes.append(node)
-        return nodes
-    """
 
     def build_execution_context(self, node) -> ExecutionContext:
         context = ExecutionContext(network=self.network)
