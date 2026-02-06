@@ -103,48 +103,20 @@ class NodeNetwork(Node):
     # find a node in all networks by id
     def find_node_by_id(self, uid: str) -> Optional[Node]:
         return NodeNetwork.graph.find_node_by_id(uid)
-        return NodeNetwork.all_nodes.get(uid)
     
-
-
-    def add_node(self, node: Node):
-        #if self.find_node(node.id):
-        #    raise ValueError(f"Node with id '{node.id}' already exists in the global node registry {NodeNetwork.all_nodes.keys()}")
-        #if self.nodes.get(id):
-        #    raise ValueError(f"Node with id '{id}' already exists in the network")
-       
-        
-#
-        #self.nodes[node.id] = node
-        # TODO: why am I not setting the network on the node here?
-        # TODO: probably should pass it in as an arg on node create.
-        #node.set_network(self) # Inject network context
-
-        #NodeNetwork.all_nodes[node.id] = node
-        NodeNetwork.graph.add_node(node)
-
     
     # TODO: this should be get_node_by_id for clarity
     def get_node_by_id(self, node_id: str) -> Optional[Node]:
         return NodeNetwork.graph.get_node_by_id(node_id)
-        if node_id == self.id:
-            return self
-        return self.nodes.get(node_id)
 
     # This method looks at nodes LOCAL to this network only
     def get_node_by_name(self, name: str) -> Optional[Node]:
         return NodeNetwork.graph.get_node_by_name(name)
-        for node in self.nodes.values():
-            if node.name == name:
-                return node
-        return None
+        
     
     def get_node_by_path(self, path: str) -> Optional[Node]:
         return NodeNetwork.graph.get_node_by_path(path)
-        for node in self.nodes.values():
-            if node.get_path() == path:
-                return node
-        return None
+       
     
         
     # --- Edge Management ---
@@ -475,7 +447,6 @@ class NodeNetwork(Node):
 
     @classmethod
     def createRootNetwork(cls, name: str, type:str) -> 'NodeNetwork':
-        #return NodeNetwork(id=name, network=None)
 
         network = NodeNetwork.create_network(name, type, network=None)
         print("####Created Root Network node with id:", network.id)
@@ -483,41 +454,28 @@ class NodeNetwork(Node):
     
     def createNetwork(self, name: str, type:str="NodeNetworkSystem") -> 'NodeNetwork':
 
-        #network_path = self.get_path()
         network_path = self.graph.get_path(self.id)  # Get the path of the current network node
         node_path = f"{network_path}/{name}"
 
         print("Creating sub-network:", name, "in network:", self.name, " of path:", node_path)
 
-        #if self.get_node_by_name(name):
         if self.get_node_by_path(node_path):
             raise ValueError(f"Node with id '{id}' already exists in the network")
        
 
         network = NodeNetwork.create_network(name, type, self)
-        #network = NodeNetwork(id=name, network=self)
-       
-        #self.add_node(network)
-
+      
         print(".  ####Added Network node to parent network:", self.name, " with id:", network.id)
     
 
         return network
 
 
-    #def create_node(self, id: str, type: str, *args, **kwargs) -> Node:
-    #    # Alias helper for createNode (standard python convention)
-    #    return self.createNode(id, type, *args, **kwargs)
-
     def createNode(self, name: str, type: str,*args, **kwargs) -> Node:
 
-        #network_path = self.get_path()
         network_path = self.graph.get_path(self.id)  # Get the path of the current network node
         node_path = f"{network_path}:{name}"
 
-        
-
-        #if self.get_node_by_name(name):
         if self.get_node_by_path(node_path):
             raise ValueError(f"Node with id '{name}' already exists in the network")
         
@@ -527,10 +485,6 @@ class NodeNetwork(Node):
         if type == "Parameter" and "value" not in kwargs and not args:
             kwargs["value"] = 0
 
-        # Inject owner for Arena/Hierarchy awareness
-        #if "owner" not in kwargs:
-        #    kwargs["owner"] = self
-
         # Delegate to Node Factory
         try:
             node = Node.create_node(name, type, network=self, *args, **kwargs)
@@ -538,8 +492,7 @@ class NodeNetwork(Node):
             # Re-raise with context if needed, or let it bubble
             raise ValueError(f"Error creating node '{type}': {e}")
 
-        #node = Node(id, type, owner=self)
-        self.add_node(node)
+        NodeNetwork.graph.add_node(node)
         return node
     
     
@@ -564,13 +517,8 @@ class NodeNetwork(Node):
 
     def connectNodes(self, from_node_name: str, from_port_name: str, to_node_name: str, to_port_name: str) -> Edge:
         
-
         print("Connecting nodes by name:", from_node_name, from_port_name, to_node_name, to_port_name)
-        
-        #from_node = self.get_node_by_name(from_node_name)
-        #to_node = self.get_node_by_name(to_node_name)
 
-        #network_path = self.get_path()
         network_path = self.graph.get_path(self.id)  # Get the path of the current network node
         from_node_path = f"{network_path}:{from_node_name}"
         to_node_path = f"{network_path}:{to_node_name}"
@@ -632,7 +580,6 @@ class NodeNetwork(Node):
             print(".   -- Graph Node:", graph_node.name, graph_node.id, " in network:", graph_node.network_id)  
 
         network_path = self.graph.get_path(self.id)
-        #network_path = self.get_path()
         node_path = f"{network_path}:{name}"
         
         node = self.get_node_by_path(node_path)
