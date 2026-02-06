@@ -483,7 +483,8 @@ class NodeNetwork(Node):
     
     def createNetwork(self, name: str, type:str="NodeNetworkSystem") -> 'NodeNetwork':
 
-        network_path = self.get_path()
+        #network_path = self.get_path()
+        network_path = self.graph.get_path(self.id)  # Get the path of the current network node
         node_path = f"{network_path}/{name}"
 
         print("Creating sub-network:", name, "in network:", self.name, " of path:", node_path)
@@ -510,16 +511,16 @@ class NodeNetwork(Node):
 
     def createNode(self, name: str, type: str,*args, **kwargs) -> Node:
 
-        network_path = self.get_path()
+        #network_path = self.get_path()
+        network_path = self.graph.get_path(self.id)  # Get the path of the current network node
         node_path = f"{network_path}:{name}"
 
         
 
         #if self.get_node_by_name(name):
         if self.get_node_by_path(node_path):
-            print(" node path =", self.get_node_by_name(name).get_path())
-            print("Network Path:", node_path, self.get_node_by_path(node_path))
             raise ValueError(f"Node with id '{name}' already exists in the network")
+        
         print("Creating node:", name, "of type:", type, "in network:", self.name, " of path:", node_path)
         # Backwards compatibility/specific logic for legacy calls
         # If args is present, assume value is passed positionally
@@ -569,7 +570,8 @@ class NodeNetwork(Node):
         #from_node = self.get_node_by_name(from_node_name)
         #to_node = self.get_node_by_name(to_node_name)
 
-        network_path = self.get_path()
+        #network_path = self.get_path()
+        network_path = self.graph.get_path(self.id)  # Get the path of the current network node
         from_node_path = f"{network_path}:{from_node_name}"
         to_node_path = f"{network_path}:{to_node_name}"
         
@@ -630,7 +632,7 @@ class NodeNetwork(Node):
             print(".   -- Graph Node:", graph_node.name, graph_node.id, " in network:", graph_node.network_id)  
 
         network_path = self.graph.get_path(self.id)
-        network_path = self.get_path()
+        #network_path = self.get_path()
         node_path = f"{network_path}:{name}"
         
         node = self.get_node_by_path(node_path)
