@@ -98,7 +98,7 @@ class TestNodePort:
 
     def test_init_defaults(self, mock_node):
         """Test basic initialization of NodePort"""
-        port = NodePort(mock_node, "test_port", 1)  # 1 = PORT_TYPE_INPUT
+        port = NodePort(mock_node.id, "test_port", 1)  # 1 = PORT_TYPE_INPUT
         
         assert port.node_id == mock_node.id
         assert port.port_name == "test_port"
@@ -110,7 +110,7 @@ class TestNodePort:
     def test_init_control_port(self, mock_node):
         """Test initialization of a Control Port"""
         # 0x80 | 1 = Control Input
-        port = NodePort(mock_node, "exec", 0x81, is_control=True)
+        port = NodePort(mock_node.id, "exec", 0x81, is_control=True)
         
         assert port.function == PortFunction.CONTROL
         assert port.isControlPort() is True
@@ -118,7 +118,7 @@ class TestNodePort:
 
     def test_dirty_flag(self, mock_node):
         """Test markDirty and markClean methods"""
-        port = NodePort(mock_node, "dirty_port", 1)
+        port = NodePort(mock_node.id, "dirty_port", 1)
         
         port.markClean()
         assert port.isDirty() is False
@@ -128,7 +128,7 @@ class TestNodePort:
 
     def test_set_value_updates_dirty_flag(self, mock_node):
         """Test that setValue marks the port as clean"""
-        port = NodePort(mock_node, "val_port", 1)
+        port = NodePort(mock_node.id, "val_port", 1)
         # Assuming DataPort/NodePort behaves this way
         port.setValue(100)
         
@@ -142,7 +142,7 @@ class TestNodePort:
         import logging
         caplog.set_level(logging.WARNING)
 
-        port = NodePort(mock_node, "int_port", 1, data_type=ValueType.INT)
+        port = NodePort(mock_node.id, "int_port", 1, data_type=ValueType.INT)
         
         # Pass a string to an INT port
         # This triggers logger.warning in setValue (updated from error in some versions?)

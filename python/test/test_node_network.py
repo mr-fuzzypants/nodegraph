@@ -31,10 +31,10 @@ class MockNode(Node):
         self.computed = False
         
         # Pre-populate some ports for testing
-        self.inputs["in"] = InputControlPort(self, "in")
-        self.outputs["out"] = OutputControlPort(self, "out")
-        self.inputs["data_in"] = InputDataPort(self, "data_in", ValueType.INT)
-        self.outputs["data_out"] = OutputDataPort(self, "data_out", ValueType.INT)
+        self.inputs["in"] = InputControlPort(self.id, "in")
+        self.outputs["out"] = OutputControlPort(self.id, "out")
+        self.inputs["data_in"] = InputDataPort(self.id, "data_in", ValueType.INT)
+        self.outputs["data_out"] = OutputDataPort(self.id, "data_out", ValueType.INT)
     
     async def compute(self):
         self.computed = True

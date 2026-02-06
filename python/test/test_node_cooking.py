@@ -20,8 +20,8 @@ class CookingTestNode(Node):
         super().__init__(id, type, **kwargs)
         self.compute_count = 0
         # Ensure we have data ports for cook_data_nodes to trace
-        self.inputs["in"] = InputDataPort(self, "in", ValueType.INT)
-        self.outputs["out"] = OutputDataPort(self, "out", ValueType.INT)
+        self.inputs["in"] = InputDataPort(self.id, "in", ValueType.INT)
+        self.outputs["out"] = OutputDataPort(self.id, "out", ValueType.INT)
     
     # Matching the updated signature from previous edits (if any)
     async def compute(self, executionContext=None):

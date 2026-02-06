@@ -30,7 +30,7 @@ class FlowTestNode(Node):
         self.outputs["next"] = OutputControlPort(self, "next")
         
         # Optional Data Ports
-        self.inputs["data_in"] = InputDataPort(self, "data_in", ValueType.INT)
+        self.inputs["data_in"] = InputDataPort(self.id, "data_in", ValueType.INT)
         
     async def compute(self, executionContext=None):
         global EXECUTION_LOG
@@ -64,7 +64,7 @@ class DataTestNode(Node):
     def __init__(self, id, type="DataTestNode", **kwargs):
         super().__init__(id, type, **kwargs)
         self.is_flow_control_node = False
-        self.outputs["out"] = OutputDataPort(self, "out", ValueType.INT)
+        self.outputs["out"] = OutputDataPort(self.id, "out", ValueType.INT)
         self.outputs["out"].value = 100 # Default value
         
     async def compute(self, executionContext=None):
@@ -86,9 +86,9 @@ class MathAddNode(Node):
     def __init__(self, id, type="MathAddNode", **kwargs):
         super().__init__(id, type, **kwargs)
         self.is_flow_control_node = False
-        self.inputs["a"] = InputDataPort(self, "a", ValueType.INT)
-        self.inputs["b"] = InputDataPort(self, "b", ValueType.INT)
-        self.outputs["sum"] = OutputDataPort(self, "sum", ValueType.INT)
+        self.inputs["a"] = InputDataPort(self.id, "a", ValueType.INT)
+        self.inputs["b"] = InputDataPort(self.id, "b", ValueType.INT)
+        self.outputs["sum"] = OutputDataPort(self.id, "sum", ValueType.INT)
 
     async def compute(self, executionContext=None):
         global EXECUTION_LOG
@@ -406,8 +406,8 @@ class TestNodeCookingFlow:
 
         # Outer Subnet Ports
         subnet.add_control_input_port("exec")
-        subnet.outputs["finished"] = OutputControlPort(subnet, "finished")
-        subnet.outputs["data_out"] = OutputDataPort(subnet, "data_out", ValueType.INT)
+        subnet.outputs["finished"] = OutputControlPort(subnet.id, "finished")
+        subnet.outputs["data_out"] = OutputDataPort(subnet.id, "data_out", ValueType.INT)
 
         # Outer Connections
         #net.connectNodes("Start", "next", "Subnet", "exec")
@@ -501,8 +501,8 @@ class TestNodeCookingFlow:
 
         subnet1.add_control_input_port("exec")
         subnet1.add_data_input_port("in_data")
-        subnet1.outputs["finished"] = OutputControlPort(subnet1, "finished")
-        subnet1.outputs["out_data"] = OutputDataPort(subnet1, "out_data", ValueType.INT)
+        subnet1.outputs["finished"] = OutputControlPort(subnet1.id, "finished")
+        subnet1.outputs["out_data"] = OutputDataPort(subnet1.id, "out_data", ValueType.INT)
         #net.add_node(subnet1)
     
         # Connections Level 0
@@ -530,8 +530,8 @@ class TestNodeCookingFlow:
         subnet2 = subnet1.createNetwork("Subnet2", "MockSubnetNode")
         subnet2.add_control_input_port("exec")
         subnet2.add_data_input_port("inner_data")
-        subnet2.outputs["finished"] = OutputControlPort(subnet2, "finished")
-        subnet2.outputs["result_data"] = OutputDataPort(subnet2, "result_data", ValueType.INT)
+        subnet2.outputs["finished"] = OutputControlPort(subnet2.id, "finished")
+        subnet2.outputs["result_data"] = OutputDataPort(subnet2.id, "result_data", ValueType.INT)
         #subnet1.add_node(subnet2)
     
         # Connections Level 1
@@ -637,8 +637,8 @@ class TestNodeCookingFlow:
 
         #net.add_node(producer)
         producer.add_control_input_port("exec")
-        producer.outputs["finished"] = OutputControlPort(producer, "finished")
-        producer.outputs["data_out"] = OutputDataPort(producer, "data_out", ValueType.INT)
+        producer.outputs["finished"] = OutputControlPort(producer.id, "finished")
+        producer.outputs["data_out"] = OutputDataPort(producer.id, "data_out", ValueType.INT)
         
         # Producer Internals
         p_data = producer.createNode("P_Internal", "DataTestNode")
