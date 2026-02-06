@@ -100,6 +100,7 @@ class NodePort:
                  data_type: ValueType = ValueType.ANY):
         
         self.node = node
+        self.node_id = node.id if node else None
         self.port_type = port_type 
         self.port_name = port_name
         self.data_type = data_type
@@ -209,8 +210,8 @@ class NodePort:
         return self.value
     
     # return the node that owns this port
-    def portOwner(self) -> Any:
-        return self.node
+    #def portOwner(self) -> Any:
+    #    return self.node
 
     
 
@@ -242,7 +243,7 @@ class ControlPort(NodePort):
     
     def deactivate(self):
      
-        logger.debug(f"Deactivating control port {self.port_name} on node {self.node.id}")
+        #logger.debug(f"Deactivating control port {self.port_name} on node {self.node.name}")
         self.setValue(False)
 
     def isActive(self):

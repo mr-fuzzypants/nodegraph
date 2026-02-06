@@ -13,8 +13,9 @@ import random
 if TYPE_CHECKING:
     from NodePort import NodePort
 
-from .NodePort import NodePort, InputDataPort, OutputDataPort, InputControlPort, OutputControlPort, ValueType, PortFunction
 
+from .NodePort import NodePort, InputDataPort, OutputDataPort, InputControlPort, OutputControlPort, ValueType, PortFunction
+from .GraphPrimitives import GraphNode
 
 # Get a logger for this module
 logger = logging.getLogger(__name__)
@@ -35,10 +36,10 @@ class ExecutionResult:
     Standardized return type for all Node execution. 
     Decouples the logic (Node) from the flow control (Runner).
     """
-    def __init__(self, command: ExecCommand, next_nodes: Optional[List['Node']] = None, next_node_ids: Optional[List[str]] = None, control_outputs: Optional[Dict[str, Any]] = None):
+    def __init__(self, command: ExecCommand,  control_outputs: Optional[Dict[str, Any]] = None):
         self.command = command
-        self.next_nodes = next_nodes if next_nodes is not None else []
-        self.next_node_ids = next_node_ids if next_node_ids is not None else []
+        self.next_nodes = [] #next_nodes if next_nodes is not None else []
+        self.next_node_ids = [] #next_node_ids if next_node_ids is not None else []
         self.network_id= ""
         self.node_id = ""
         self.node_path = ""
@@ -75,6 +76,7 @@ class ExecutionContext:
     def __init__(self, node: 'Node'):
         self.node = node
         self.network = node.network if node else None
+        self.network_id = self.network.id if self.network else None
 
         #self.execution_trace: List[str] = []  # Trace of executed node IDs for debugging
         #self.custom_context: Dict[str, Any] = {}  # User-defined context data
@@ -83,14 +85,14 @@ class ExecutionContext:
 
 
     def get_port_value(self, port) -> Dict[str, Any]:
-        incoming_edges = self.network.get_incoming_edges(port.node.id, port.port_name)
+        incoming_edges = self.network.get_incoming_edges(port.node_id, port.port_name)
       
         if not incoming_edges:
             return None
         
         edge = incoming_edges[0]
-                    
-        source_node = self.network.get_node(edge.from_node_id)
+        
+        source_node = self.network.get_node_by_id(edge.from_node_id)
         #`print(". SOURCE NODE:", source_node.id, source_node.type)
         if source_node.isNetwork():
             #AssertionError("Source node is a Network - should not happen in this context")
@@ -124,9 +126,9 @@ class ExecutionContext:
 
         result = {
             "uuid": self.node.uuid,
-            "network_id": self.network.id if self.network else None,
+            "network_id": self.network_id if self.network else None,
             "node_id": self.node.id,
-            "node_path": self.node.get_path(),
+            "node_path": self.node.path,
             "data_inputs": data_inputs,
             "control_inputs": control_inputs
         }
@@ -143,6 +145,9 @@ class ExecutionContext:
             port = self.node.inputs.get(port_name)
             port.value = value
             port._isDirty = False   
+
+
+
 
 
 # A typescript map behaves like an ordered dict in python
@@ -177,8 +182,10 @@ class Node(ABC):
                  network: 'NodeNetwork',
                  inputs: Optional[Dict[str, NodePort]] = None, 
                  outputs: Optional[Dict[str, NodePort]] = None):
+        
+        #super().__init__(name, type, network.id if network else None)
         self.name = name
-        self.id = name
+        self.id = uuid.uuid4().hex
         #self.id = uuid.uuid4().hex  # Unique identifier for the node
         self.type = type
         self.uuid = uuid.uuid4().hex  # Unique identifier for the node instance
@@ -192,28 +199,41 @@ class Node(ABC):
         self._isDirty = True  
         #self.owner = owner  # Parent ID or Reference? Keeping Ref for now to pass tests.
         self.network = network # Reference to the container network
+        self.network_id = network.id if network else None   
 
-        #self.path = f"{self.owner.network}:{self.id}" if self.network else self.id  
+        self.path= " path node computed at runtime " # This is a bit of a hack, but it allows us to have a path property that is computed at runtime based on the network structure. In Rust/TS, we can compute this on demand or cache it as needed.
 
+    """
     # TODO: why am I setting network here?
     # 
-    def set_network(self, network):
-        self.network = network
-        #self.path = f"{self.network.path}:{self.id}" if self.network else self.id  
+    #def set_network(self, network):
+    #    raise ValueError(f"Node '{self.id}' is already part of a network. Reassigning networks is not supported.")
+    #    self.network = network
+    #    #self.path = f"{self.network.path}:{self.id}" if self.network else self.id  
     
+    """
+ 
+
+    # moved to graph
     def get_path(self) -> str:
+        
         path_elements = []
         cur_parent =self.network
+        #cur_parent = self.getNetwork()
         while cur_parent:
-            path_elements.append(cur_parent.id)
+            path_elements.append(cur_parent.name)
             cur_parent = cur_parent.network
+            #cur_parent = cur_parent.getNetwork() 
         
         path_elements.reverse()
         full_path = "/" + "/".join(path_elements)
         if self.isNetwork():
-            full_path += f"/{self.id}"
+            full_path += f"/{self.name}"
         else:
-            full_path += f":{self.id}"
+            full_path += f":{self.name}"
+
+        if full_path.startswith("//"):
+            full_path = full_path[1:]   
         return full_path
 
     def isNetwork(self) -> bool:
@@ -226,10 +246,10 @@ class Node(ABC):
         return self.is_flow_control_node == True
     
     def markDirty(self):
-        if self._isDirty:
-            return
+        #if self._isDirty:
+        #    return
         self._isDirty = True
-        
+        return
         # TODO: I don't think we need to propagate dirty state to input ports 
         # Propagate dirty state to all output ports so downstream nodes are invalidated
         for port in self.outputs.values():
@@ -359,7 +379,10 @@ class Node(ABC):
         
         return port
 
+    """
+    Not Using?
     def is_connected(self, port_name: str, is_input: bool = True) -> bool:
+        raise(False)
         port = self.inputs.get(port_name) if is_input else self.outputs.get(port_name)
         if not port:
             raise ValueError(f"Port '{port_name}' not found in node '{self.id}'")
@@ -373,13 +396,17 @@ class Node(ABC):
             #return len(port.outgoing_connections) > 0
             return len(self.network.get_outgoing_edges(self.id, port.port_name)) > 0
 
+    """          
+
     # Removed get_source_nodes / get_target_nodes logic that relies on object traversal
     # In Rust/TS, you'd query the Graph/Network with the connection IDs. 
     # For now, leaving simple accessors if necessary:
     # def get_source_nodes(self, port_name): ...
-    
-
+    """"
+    MOVED to network
+    # not currenty being used, but will be needed.
     def can_connect_output_to(self, from_port_name: str, other_node: 'Node', to_port_name: str) -> bool:
+        #assert(False), "CAN CONNECT OUTPUT TO NOT USED ANYMORE"
         from_port = self.outputs.get(from_port_name)
         to_port = other_node.inputs.get(to_port_name)
 
@@ -389,21 +416,46 @@ class Node(ABC):
             raise ValueError(f"Input port '{to_port_name}' not found in node '{other_node.id}'")
         
         # Identity check using IDs for portability
-        if from_port.node.id == other_node.id:
+        if from_port.node_id == other_node.id:
             return False
         
         return True
 
+    """
+    """
     def connect_output_to(self, from_port_name: str, other_node: 'Node', to_port_name: str):
+        #assert(False)
         from_port = self.outputs.get(from_port_name)
         to_port = other_node.inputs.get(to_port_name)
 
-        if not from_port:
-            raise ValueError(f"Output port '{from_port_name}' not found in node '{self.id}'")
+        print("CONNECTING NODES:", self.name, from_port_name,"->", other_node.name, to_port_name)
         if not to_port:
-            raise ValueError(f"Input port '{to_port_name}' not found in node '{other_node.id}'")
+            print("TO PORT NOT FOUND")
+            print(". from Input Ports:", self.inputs.keys())
+            print(". from Output Ports:", self.outputs.keys())
+            print(". other Node Input Ports:", other_node.inputs.keys())
+            print(". other Node Output Ports:", other_node.outputs.keys())
+            if self.network_id == other_node.id:
+                to_port = other_node.outputs.get(to_port_name)
+
+       
+        if not from_port:
+            print("FROM PORT NOT FOUND", self.isNetwork(), self.id, other_node.network_id)
+            print(". from Input Ports:", self.inputs.keys())
+            print(". from Output Ports:", self.outputs.keys())
+            print(". other Node Input Ports:", other_node.inputs.keys())
+            print(". other Node Output Ports:", other_node.outputs.keys())
+            if self.id == other_node.network_id:
+                from_port = self.inputs.get(from_port_name)
+            else:
+                assert(False), "FROM PORT STILL NOT FOUND"
+
+        if not from_port:
+            raise ValueError(f"Output port '{from_port_name}' not found in node '{self.name}'")
+        if not to_port:
+            raise ValueError(f"Input port '{to_port_name}' not found in node '{other_node.name}'")
         
-        if from_port.node.id == other_node.id:
+        if from_port.node_id == other_node.id:
             raise ValueError("Cannot connect a node's output to its own input")
         
         # --- NEW ARENA LOGIC ---
@@ -414,7 +466,8 @@ class Node(ABC):
         #     raise RuntimeError(f"Nodes '{self.id}' and '{other_node.id}' are not in the same network.")
 
 
-        existing_connections = self.network.get_incoming_edges(self.id, from_port_name)
+        existing_connections = self.network.get_incoming_edges(other_node.id, to_port_name)
+        print("  ->Existing Connections on", other_node.name, to_port_name, ":", len(existing_connections))
         if existing_connections:
             if to_port.isInputOutputPort() or from_port.isInputOutputPort():
                 #TODO: what is this case?
@@ -425,10 +478,13 @@ class Node(ABC):
         
         
         #return from_port.connectTo(to_port)
-        return self.network.add_edge(self.id, from_port_name, other_node.id, to_port_name)
+        edge = self.network.add_edge(self.id, from_port_name, other_node.id, to_port_name)
 
-        
-  
+        existing_connections = self.network.get_incoming_edges(other_node.id, to_port_name)
+        print("  POST ADD Connections on", other_node.name, other_node.id, to_port_name, ":", len(existing_connections))
+        print(".    -- networkId:", self.network_id)
+        return edge
+    """
 
     # TODO: precompute should not compute inputs. this should be done in compute() and this should be a callback only
     def precompute(self):
@@ -478,16 +534,19 @@ class Node(ABC):
         for output_port in self.get_output_data_ports():
             print(f".       Output Port [{output_port.port_name}] dirty: {output_port.isDirty()}; value: {output_port.value}")
     
+    """
+    NOT Using?
     def _get_nodes_from_port(self, port: NodePort) -> List['Node']:
         nodes = []
         # Support both output ports and input/output ports acting as outputs
         if self.network:
              outgoing_edges = self.network.get_outgoing_edges(self.id, port.port_name)
              for edge in outgoing_edges:
-                 node = self.network.get_node(edge.to_node_id)
+                 node = self.network.get_node_by_id(edge.to_node_id)
                  if node:
                      nodes.append(node)
         return nodes
+    """
 
     def build_execution_context(self, node) -> ExecutionContext:
         context = ExecutionContext(network=self.network)
