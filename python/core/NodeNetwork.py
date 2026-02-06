@@ -76,8 +76,7 @@ class ExecutionContext:
     """
     def __init__(self, node: 'Node'):
         self.node = node
-        self.network = node.network if node else None
-        self.network_id = self.network.id if self.network else None
+        self.network_id = node.network_id
 
         #self.execution_trace: List[str] = []  # Trace of executed node IDs for debugging
         #self.custom_context: Dict[str, Any] = {}  # User-defined context data
@@ -86,14 +85,14 @@ class ExecutionContext:
 
 
     def get_port_value(self, port) -> Dict[str, Any]:
-        incoming_edges = self.network.get_incoming_edges(port.node_id, port.port_name)
+        incoming_edges = NodeNetwork.graph.get_incoming_edges(port.node_id, port.port_name)
       
         if not incoming_edges:
             return None
         
         edge = incoming_edges[0]
         
-        source_node = self.network.get_node_by_id(edge.from_node_id)
+        source_node = NodeNetwork.graph.get_node_by_id(edge.from_node_id)
         #`print(". SOURCE NODE:", source_node.id, source_node.type)
         if source_node.isNetwork():
             #AssertionError("Source node is a Network - should not happen in this context")
@@ -127,7 +126,7 @@ class ExecutionContext:
 
         result = {
             "uuid": self.node.uuid,
-            "network_id": self.network_id if self.network else None,
+            "network_id": self.network_id,
             "node_id": self.node.id,
             "node_path": self.node.path,
             "data_inputs": data_inputs,
@@ -289,7 +288,7 @@ class NodeNetwork(Node):
         if port_name in self.inputs:
             raise ValueError(f"Control input port '{port_name}' already exists in node '{self.id}'")
          
-        port = InputOutputControlPort(self, port_name)
+        port = InputOutputControlPort(self.id, port_name)
         self.inputs[port_name] = port
         return port
 
@@ -298,7 +297,7 @@ class NodeNetwork(Node):
         if port_name in self.inputs:
             raise ValueError(f"Data input port '{port_name}' already exists in node '{self.id}'")
         
-        port = InputOutputDataPort(self, port_name)
+        port = InputOutputDataPort(self.id, port_name)
         self.inputs[port_name] = port
 
         return port

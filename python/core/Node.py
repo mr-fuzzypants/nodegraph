@@ -248,13 +248,13 @@ class Node(ABC):
 
     
     def add_control_input(self, port_name: str) -> InputControlPort:
-        port = InputControlPort(self, port_name)
+        port = InputControlPort(self.id, port_name)
         self.inputs[port_name] = port
         return port
     
 
     def add_control_output(self, port_name: str) -> OutputControlPort:
-        port = OutputControlPort(self, port_name)
+        port = OutputControlPort(self.id, port_name)
         self.outputs[port_name] = port
         return port
     
@@ -263,7 +263,7 @@ class Node(ABC):
         if port_name in self.inputs:
             raise ValueError(f"Data input port '{port_name}' already exists in node '{self.id}'")
         
-        port = InputDataPort(self, port_name, data_type=data_type)
+        port = InputDataPort(self.id, port_name, data_type=data_type)
         self.inputs[port_name] = port
 
         return port
@@ -273,7 +273,7 @@ class Node(ABC):
         if port_name in self.outputs:
             raise ValueError(f"Data output port '{port_name}' already exists in node '{self.id}'")
         
-        port = OutputDataPort(self, port_name, data_type=data_type)
+        port = OutputDataPort(self.id, port_name, data_type=data_type)
         self.outputs[port_name] = port
 
         return port
