@@ -158,39 +158,6 @@ class NodePort:
         return self.direction == PortDirection.INPUT_OUTPUT
     
 
-    # TDOD: implement connection management and type checking higher up in the
-    # network layer?
-    """
-    def connectTo(self, other_port: 'NodePort'):
-
-
-        logger.debug(f"Connecting port '{self.port_name}' on node '{self.node}' to port '{other_port.port_name}' on node '{other_port.node}'")
-      
-        if self.node == other_port.node:
-            # don't do this check if either port is an input/output port
-            if not self.isInputOutputPort() and not other_port.isInputOutputPort():
-                # assert(False) # Removed assert false to avoid halting
-                raise ValueError("Cannot connect a port to another port on the same node")
-                
-           
-        # TYPE CHECKING 
-        # Allow connection if types match, or if one of them is ANY
-        if self.data_type != ValueType.ANY and other_port.data_type != ValueType.ANY:
-            if self.data_type != other_port.data_type:
-                 # Special case: Allow connecting Int to Float?
-                 if not (self.data_type == ValueType.INT and other_port.data_type == ValueType.FLOAT):
-                    raise ValueError(f"Type Mismatch: Cannot connect {self.data_type} to {other_port.data_type}")
-
-
-        if not self.node.network:
-             raise ValueError(f"Node {self.node.id} is not attached to a network. Cannot create connection from {self.port_name}.")
-
-        self.node.network.add_edge(self.node.id, self.port_name, other_port.node.id, other_port.port_name)
-
-        return None # connection removed
-
-        # Note: Removing runtime value check here, it should be in setValue
-    """ 
     
     # TODO: should this be the default implmentation?
     def setValue(self, value: Any):
@@ -209,13 +176,7 @@ class NodePort:
     def getValue(self) -> Any:
         return self.value
     
-    # return the node that owns this port
-    #def portOwner(self) -> Any:
-    #    return self.node
-
     
-
-
 
 # HMMM. do we need these subclasses and do we seperate control/data port types when defining ports on nodes?
 class DataPort(NodePort):
