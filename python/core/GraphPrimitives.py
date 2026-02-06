@@ -101,7 +101,7 @@ class Graph:
     def get_node_by_path(self, path: str) -> Optional[GraphNode]:
         #return NodeNetwork.graph.get_node_by_path(path)
         for node in self.nodes.values():
-            if node.get_path() == path:
+            if self.get_path(node.id) == path:
                 return node
         return None
     
