@@ -99,7 +99,6 @@ class NodePort:
                  is_control: bool = False, 
                  data_type: ValueType = ValueType.ANY):
         
-        self.node = node
         self.node_id = node.id if node else None
         self.port_type = port_type 
         self.port_name = port_name

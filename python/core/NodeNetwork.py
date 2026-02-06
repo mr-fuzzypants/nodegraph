@@ -1,7 +1,7 @@
 from collections import defaultdict
 from typing import Optional, List, Dict, Any, Type, Callable, TYPE_CHECKING
 #from typing import Dict, List, Optional, Any, TYPE_CHECKING
-from .Node import Node, ExecCommand, ExecutionResult, ExecutionContext
+from .Node import Node
 from .GraphPrimitives import Edge, Graph, GraphNode
 from .NodePort import (
     InputOutputDataPort, 
@@ -19,6 +19,133 @@ if TYPE_CHECKING:
 from logging import getLogger
 logger = getLogger(__name__)
 
+
+from enum import Enum, auto
+# --- RUNTIME COMMAND STRUCTS (Port-Friendly) ---
+# This architecture allows the execution engine to be decoupled from the graph structure.
+# In Python, recursion is fine. In Typescript (Async) and Rust (Ownership),
+# we cannot simply call `node.compute()` recursively.
+# Instead, `compute()` returns a Command, and a central "Runner" decides what to do next.
+class ExecCommand(Enum):
+    CONTINUE = auto()   # Scheduler: Add 'next_nodes' to the execution queue
+    WAIT = auto()       # Scheduler: Pause execution (e.g. await Promise)
+    LOOP_AGAIN = auto() # Scheduler: Re-schedule this node immediately (for iterative loops)
+    COMPLETED = auto()  # Scheduler: Stop this branch of execution
+
+class ExecutionResult:
+    """
+    Standardized return type for all Node execution. 
+    Decouples the logic (Node) from the flow control (Runner).
+    """
+    def __init__(self, command: ExecCommand,  control_outputs: Optional[Dict[str, Any]] = None):
+        self.command = command
+        #self.next_nodes = [] #next_nodes if next_nodes is not None else []
+        #self.next_node_ids = [] #next_node_ids if next_node_ids is not None else []
+        self.network_id= ""
+        self.node_id = ""
+        self.node_path = ""
+        self.uuid = ""
+        self.data_outputs = {}
+        # TODOL why?
+        self.control_outputs = control_outputs if control_outputs is not None else {}
+
+    
+    def deserialize_result(self, node):
+        #TODO (1): we may want to have a more formal way of returning 
+        #TODO:  output values and updating ports.
+        for output_name, output_value in self.data_outputs.items():
+            out_port = node.outputs.get(output_name)
+            if out_port:
+                out_port.value = output_value
+                out_port._isDirty = False
+
+        #TODO (2): we may want to have a more formal way of returning 
+        #TODO:  output values and updating ports.
+        for output_name, output_value in self.control_outputs.items():
+            out_port = node.outputs.get(output_name)
+            if out_port:
+                out_port.value = output_value
+                out_port._isDirty = False
+        node.markClean()
+
+
+class ExecutionContext:
+    """
+    Context object passed to nodes during execution.
+    Can hold references to the network, global state, etc.
+    """
+    def __init__(self, node: 'Node'):
+        self.node = node
+        self.network = node.network if node else None
+        self.network_id = self.network.id if self.network else None
+
+        #self.execution_trace: List[str] = []  # Trace of executed node IDs for debugging
+        #self.custom_context: Dict[str, Any] = {}  # User-defined context data
+        #self.logger = logger  # Logger instance for nodes to use
+        #self.step_count: int = 0  # Execution step counter
+
+
+    def get_port_value(self, port) -> Dict[str, Any]:
+        incoming_edges = self.network.get_incoming_edges(port.node_id, port.port_name)
+      
+        if not incoming_edges:
+            return None
+        
+        edge = incoming_edges[0]
+        
+        source_node = self.network.get_node_by_id(edge.from_node_id)
+        #`print(". SOURCE NODE:", source_node.id, source_node.type)
+        if source_node.isNetwork():
+            #AssertionError("Source node is a Network - should not happen in this context")
+            # Check outputs first (Standard Node behavior)
+            source_port = source_node.outputs.get(edge.from_port_name)
+            if not source_port:
+                # Fallback to inputs (Tunneling/Passthrough for Network Nodes)
+                #print(". SOURCE NODE IS A NETWORK - Checking Inputs for Tunneling")
+                source_port = source_node.inputs.get(edge.from_port_name)
+                #print(". -> SOURCE PORT FROM NETWORK INPUT:", source_port.port_name, source_port.value,  source_port.isInputOutputPort() if source_port else "None")
+        else:
+            source_port = source_node.outputs.get(edge.from_port_name)  
+
+        if source_port is None:
+            raise ValueError(f"Source port '{edge.from_port_name}' not found on node '{source_node.id}'")   
+        
+        return source_port.value
+
+    def to_dict(self) -> Dict[str, Any]:
+
+        
+        #print("Building execution context for node:", self.node.id, self.node.type)
+        data_inputs = {}
+        control_inputs = {}
+        for port_name, port in self.node.inputs.items():
+            if port.isDataPort():
+                data_inputs[port_name] = self.get_port_value(port)
+            elif port.isControlPort():
+                control_inputs[port_name] = self.get_port_value(port)
+                #control_inputs[port_name] = port.isActive()
+
+        result = {
+            "uuid": self.node.uuid,
+            "network_id": self.network_id if self.network else None,
+            "node_id": self.node.id,
+            "node_path": self.node.path,
+            "data_inputs": data_inputs,
+            "control_inputs": control_inputs
+        }
+
+        return result
+
+    def from_dict(self, context_dict: Dict[str, Any]):
+        for port_name, value in context_dict.get("data_inputs", {}).items():
+            port = self.node.inputs.get(port_name)
+            port.value = value
+            port._isDirty = False
+
+        for port_name, value in context_dict.get("control_inputs", {}).items():
+            port = self.node.inputs.get(port_name)
+            port.value = value
+            port._isDirty = False   
 
 
 
@@ -288,7 +415,7 @@ class NodeNetwork(Node):
         if not to_port:
             raise ValueError(f"Input port '{to_port_name}' not found in node '{other_node.id}'")
         
-        if from_port.node.id == other_node.id:
+        if from_port.node_id == other_node.id:
             raise ValueError("Cannot connect a node's output to its own input")
 
         # assert(from_port.isInputOutputPort()), "Source port must be an input/output port"
@@ -304,9 +431,10 @@ class NodeNetwork(Node):
         # NOTE: Tunnel connections are stored in the Network's edge list 
         # just like any other connection.
         
-        if to_port.node.network != self and to_port.node != self:
+        #TODO: fix this.
+        #if to_port.node.network != self and to_port.node != self:
              # Standard check that both are in this network?
-             pass 
+        #     pass 
 
         # Create Edge directly to avoid "Not attached to network" error
         # since 'self' (the network) is the node, and it manages its own edges.
@@ -620,7 +748,7 @@ class NodeNetwork(Node):
         #assert(False), "get_downstream_ports is deprecated, use port.get_downstream_ports instead"
         #assert(False), "get_downstream_ports is deprecated, use port.get_downstream_ports instead"
         downstream_ports = []
-        outgoing_edges = self.get_outgoing_edges(src_port.node.id, src_port.port_name)
+        outgoing_edges = self.get_outgoing_edges(src_port.node_id, src_port.port_name)
 
         for edge in outgoing_edges:
             dest_node = self.get_node_by_id(edge.to_node_id)
@@ -648,7 +776,7 @@ class NodeNetwork(Node):
         
         #assert(False), "get_upstream_ports is deprecated, use port.get_upstream_ports instead"
         upstream_ports = []
-        incoming_edges = self.get_incoming_edges(port.node.id, port.port_name)
+        incoming_edges = self.get_incoming_edges(port.node_id, port.port_name)
 
         for edge in incoming_edges:
             src_node = self.get_node_by_id(edge.from_node_id)
@@ -695,7 +823,7 @@ class NodeNetwork(Node):
     def get_upstream_nodes(self, port: NodePort) -> List[Node]:
         upstream_nodes = []
         #incoming_edges = port.node.network.get_incoming_edges(port.node.id, port.port_name)
-        incoming_edges = self.get_incoming_edges(port.node.id, port.port_name)
+        incoming_edges = self.get_incoming_edges(port.node_id, port.port_name)
         
         for edge in incoming_edges:
             #src_node = port.node.network.get_node_by_id(edge.from_node_id)
@@ -708,7 +836,7 @@ class NodeNetwork(Node):
     def get_downstream_nodes(self, port: NodePort) -> List[Node]:
         downstream_nodes = []
         #outgoing_edges = port.node.network.get_outgoing_edges(port.node.id, port.port_name)
-        outgoing_edges = self.get_outgoing_edges(port.node.id, port.port_name)
+        outgoing_edges = self.get_outgoing_edges(port.node_id, port.port_name)
 
         for edge in outgoing_edges:
             #dest_node = port.node.network.get_node_by_id(edge.to_node_id)
