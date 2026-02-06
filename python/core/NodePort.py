@@ -105,7 +105,7 @@ class NodePort:
         self.port_name = port_name
         self.data_type = data_type
         self._isDirty: bool = True 
-        self.value: Any = None 
+        self.value: Any = self._get_default_for_type(data_type)
 
         # Infer new Enums from legacy flags
         self.direction = PortDirection.INPUT
@@ -119,7 +119,14 @@ class NodePort:
         if is_control:
              self.port_type |= PORT_TYPE_CONTROL
 
-
+    def _get_default_for_type(self, dtype: ValueType) -> Any:
+        if dtype == ValueType.INT: return 0
+        if dtype == ValueType.FLOAT: return 0.0
+        if dtype == ValueType.STRING: return ""
+        if dtype == ValueType.BOOL: return False
+        if dtype == ValueType.ARRAY: return []
+        if dtype == ValueType.DICT: return {}
+        return None
     
     def markDirty(self):
         AssertionError
@@ -161,13 +168,14 @@ class NodePort:
     
     # TODO: should this be the default implmentation?
     def setValue(self, value: Any):
+        # Strict type checking enables mapping to Rust Enums/TS Unions
+        if not ValueType.validate(value, self.data_type):
+             # Log warning for now, but in future (Rust) this is a compile/runtime error
+             logger.warning(f"Port '{self.port_name}' expected {self.data_type}, got {type(value)}. Value={value}")
+             # raise TypeError(f"Port '{self.port_name}' requires {self.data_type}, got {type(value)}")
+             
         self.value = value
         self._isDirty = False
-
-        # TYPE CHECKING.
-        # TODO: Should this raise an error instead of just logging?
-        if not ValueType.validate(value, self.data_type):
-             logger.warning(f"Port '{self.port_name}' expected {self.data_type}, got {type(value)}")
      
 
 
