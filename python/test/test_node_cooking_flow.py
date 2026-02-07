@@ -96,8 +96,8 @@ class MathAddNode(Node):
 
 @NodeNetwork.register("MockSubnetNode")
 class MockSubnetNode(NodeNetwork):
-    def __init__(self, id, type, network_id=None, **kwargs):
-        super().__init__(id, type,  network_id=network_id)
+    def __init__(self, id, type, network_id=None, graph=None, **kwargs):
+        super().__init__(id, type,  network_id=network_id, graph=graph)
         self.type = "MockSubnetNode"
         self.is_flow_control_node = True
         self.cooking_internally = False
@@ -119,8 +119,8 @@ class TestNodeCookingFlow:
 
         #NodeNetwork.all_nodes.clear()  # Reset global registry
 
-        NodeNetwork.deleteAllNodes()
-        NodeNetwork.graph.reset()
+        #NodeNetwork.deleteAllNodes()
+        #NodeNetwork.graph.reset()
 
     def teardown_method(self):
         # Stub: Cleanup logic here

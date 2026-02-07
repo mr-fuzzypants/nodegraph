@@ -57,7 +57,7 @@ class TestNodeNetwork:
     def test_network_creation(self):
         """Test basic initialization and hierarchy properties"""
         #net = NodeNetwork("net1", None)
-        net = NodeNetwork.create_network("net1", "NodeNetworkSystem", None)
+        net = NodeNetwork.createRootNetwork("net1", "NodeNetworkSystem")
         assert net.name == "net1"
         assert net.isNetwork() is True
         assert net.isRootNetwork() is True
@@ -78,7 +78,7 @@ class TestNodeNetwork:
     def test_create_node_factory(self):
         """Test creating nodes via the network factory wrapper"""
         #net = NodeNetwork("net1", None)
-        net = NodeNetwork.create_network("net1", "NodeNetworkSystem", None)
+        net = NodeNetwork.createRootNetwork("net1", "NodeNetworkSystem")
         
         # Uses the @Node.register("MockNode") above
         node = net.createNode("n1", "MockNode")
@@ -94,10 +94,10 @@ class TestNodeNetwork:
     def test_create_subnetwork(self):
         """Test creating nested networks"""
         #root = NodeNetwork("root", None)
-        root = NodeNetwork.create_network("root", "NodeNetworkSystem", None)
+        root = NodeNetwork.createRootNetwork("root", "NodeNetworkSystem")
 
         #subnet = root.createNetwork("subnet1")
-        subnet = NodeNetwork.create_network("subnet1", "NodeNetworkSystem", root.id)
+        subnet = root.createNetwork("subnet1", "NodeNetworkSystem")
         
         assert subnet.name == "subnet1"
         assert subnet.network_id == root.id
@@ -107,13 +107,13 @@ class TestNodeNetwork:
         
         # Ensure deep nesting works
         #subsubnet = subnet.createNetwork("deep_net")
-        subsubnet = NodeNetwork.create_network("deep_net", "NodeNetworkSystem", subnet.id)
+        subsubnet = subnet.createNetwork("deep_net", "NodeNetworkSystem")
         assert subsubnet.network_id == subnet.id
 
     def test_add_network_ports(self):
         """Test adding Tunnel/InputOutput ports to the network boundary"""
         #net = NodeNetwork("net1", None)
-        net = NodeNetwork.create_network("net1", "NodeNetworkSystem", None)
+        net = NodeNetwork.createRootNetwork("net1", "NodeNetworkSystem")
         
         in_ctrl = net.add_control_input_port("start")
         in_data = net.add_data_input_port("param")
@@ -133,7 +133,7 @@ class TestNodeNetwork:
     def test_connect_nodes_internal(self):
         """Test connecting two nodes strictly inside the network"""
         #net = NodeNetwork("net_test", None)
-        net = NodeNetwork.create_network("net_test", "NodeNetworkSystem", None)
+        net = NodeNetwork.createRootNetwork("net_test", "NodeNetworkSystem")
 
         node_a = net.createNode("A", "MockNode")
         node_b = net.createNode("B", "MockNode")
@@ -157,7 +157,7 @@ class TestNodeNetwork:
 
     def test_connect_node_not_found(self):
         #net = NodeNetwork("net_err", None)
-        net = NodeNetwork.create_network("net_err", "NodeNetworkSystem", None)
+        net = NodeNetwork.createRootNetwork("net_err", "NodeNetworkSystem")
 
         with pytest.raises(ValueError) as exc:
             net.connectNodes("Missing1", "out", "Missing2", "in")
@@ -166,7 +166,7 @@ class TestNodeNetwork:
     def test_connect_network_input_to_internal(self):
         """Test distributing a Network Input to an internal node (Tunnel In)"""
         #net = NodeNetwork("net_tunnel", None)
-        net = NodeNetwork.create_network("net_tunnel", "NodeNetworkSystem", None)
+        net = NodeNetwork.createRootNetwork("net_tunnel", "NodeNetworkSystem")
         
         internal_node = net.createNode("inner", "MockNode")
         
@@ -186,7 +186,7 @@ class TestNodeNetwork:
         assert net.find_node_by_id(edge.to_node_id).name == "inner"
 
     def test_delete_node(self):
-        net = NodeNetwork.create_network("root_net", "NodeNetworkSystem", None)
+        net = NodeNetwork.createRootNetwork("root_net", "NodeNetworkSystem")
         #net= NodeNetworkRoot("net_del", None)
         #net = NodeNetwork("net_del", None)
         net.createNode("A", "MockNode")
@@ -214,7 +214,7 @@ class TestNodeNetwork:
                         -> [n3 (data_in)]
         """
         #net = NodeNetwork("net_downstream", None)
-        net = NodeNetwork.create_network("net_downstream", "NodeNetworkSystem", None)
+        net = NodeNetwork.createRootNetwork("net_downstream", "NodeNetworkSystem")
         n1 = net.createNode("n1", "MockNode")
         n2 = net.createNode("n2", "MockNode")
         n3 = net.createNode("n3", "MockNode")
@@ -246,7 +246,7 @@ class TestNodeNetwork:
         [Network Input Port] -> [Internal Node Input]
         """
         #net = NodeNetwork("net_iterative", None)
-        net = NodeNetwork.create_network("net_iterative", "NodeNetworkSystem", None)
+        net = NodeNetwork.createRootNetwork("net_iterative", "NodeNetworkSystem")
         # Simulate a tunneling port (Input/Output behavior)
         # For this test, we might need a node with passthrough ports, 
         # but let's stick to standard edges first to ensure base logic holds.
@@ -273,7 +273,7 @@ class TestNodeNetwork:
         Let's try 1:1 first.
         """
         #net = NodeNetwork("net_upstream", None)
-        net = NodeNetwork.create_network("net_upstream", "NodeNetworkSystem", None)
+        net = NodeNetwork.createRootNetwork("net_upstream", "NodeNetworkSystem")
 
         n1 = net.createNode("n1", "MockNode")
         n2 = net.createNode("n2", "MockNode")
@@ -293,13 +293,13 @@ class TestNodeNetwork:
         Uses manual edge creation to ensure topology is set regardless of high-level validation.
         """
         #net = NodeNetwork("root", None)
-        net = NodeNetwork.create_network("root", "NodeNetworkSystem", None)
+        net = NodeNetwork.createRootNetwork("root", "NodeNetworkSystem")
         n1 = net.createNode("n1", "MockNode")
         n2 = net.createNode("n2", "MockNode")
         
         # Relay node
         #relay_node = net.createNetwork("relay") 
-        relay_node = NodeNetwork.create_network("relay", "NodeNetworkSystem", net.id)
+        relay_node = net.createNetwork("relay", "NodeNetworkSystem")
         # Add a port that is technically in 'inputs' but has INPUT_OUTPUT direction
         relay_port = relay_node.add_data_input_port("io_port")
         
@@ -328,13 +328,13 @@ class TestNodeNetwork:
         Test upstream from n2.
         """
         #net = NodeNetwork("root_up", None)
-        net = NodeNetwork.create_network("root_up", "NodeNetworkSystem", None)
+        net = NodeNetwork.createRootNetwork("root_up", "NodeNetworkSystem")
 
         n1 = net.createNode("n1", "MockNode")
         n2 = net.createNode("n2", "MockNode")
         
         #relay_node = net.createNetwork("relay") 
-        relay_node = NodeNetwork.create_network("relay", "NodeNetworkSystem", net.id)
+        relay_node = net.createNetwork("relay", "NodeNetworkSystem")
         relay_port = relay_node.add_data_input_port("io_port")
         
         # Edge 1: n1 -> relay
@@ -353,7 +353,7 @@ class TestNodeNetwork:
 
     def test_get_input_port_value(self):
         #net = NodeNetwork("net_val", None)
-        net = NodeNetwork.create_network("net_val", "NodeNetworkSystem", None)
+        net = NodeNetwork.createRootNetwork("net_val", "NodeNetworkSystem")
 
         n1 = net.createNode("n1", "MockNode")
         n2 = net.createNode("n2", "MockNode")
@@ -380,7 +380,7 @@ class TestNodeNetwork:
         Current implementation takes the last one and back-propagates to others.
         """
         #net = NodeNetwork("net_multi", None)
-        net = NodeNetwork.create_network("net_multi", "NodeNetworkSystem", None)
+        net = NodeNetwork.createRootNetwork("net_multi", "NodeNetworkSystem")
         n1 = net.createNode("n1", "MockNode")
         print(n1.outputs)
         n2 = net.createNode("n2", "MockNode")

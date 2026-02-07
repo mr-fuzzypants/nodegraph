@@ -30,7 +30,7 @@ class CookingTestNode(Node):
         global EXECUTION_LOG
 
         # TODO: we should be passing in the node name to the conext
-        node = NodeNetwork.graph.find_node_by_id(executionContext["node_id"])
+        node = self.graph.find_node_by_id(executionContext["node_id"])
         EXECUTION_LOG.append(node.name)
         self.compute_count += 1
 
