@@ -1,5 +1,6 @@
 from collections import defaultdict
-from typing import Optional, List, Dict, Any, Type, Callable, TYPE_CHECKING
+import asyncio
+from typing import Optional, List, Dict, Any, Type, Callable, TYPE_CHECKING, Tuple
 #from typing import Dict, List, Optional, Any, TYPE_CHECKING
 from .Node import Node
 from .GraphPrimitives import Edge, Graph, GraphNode
@@ -12,6 +13,7 @@ from .NodePort import (
     PortFunction
 )
 
+from .Interface import INodePort, INodeNetwork, IExecutionResult, IExecutionContext
 if TYPE_CHECKING:
     pass
 
@@ -35,7 +37,7 @@ class ExecCommand(Enum):
     LOOP_AGAIN = auto() # Scheduler: Re-schedule this node immediately (for iterative loops)
     COMPLETED = auto()  # Scheduler: Stop this branch of execution
 
-class ExecutionResult:
+class ExecutionResult(IExecutionResult):
     """
     Standardized return type for all Node execution. 
     Decouples the logic (Node) from the flow control (Runner).
@@ -72,7 +74,7 @@ class ExecutionResult:
         node.markClean()
 
 
-class ExecutionContext:
+class ExecutionContext(IExecutionContext):
     """
     Context object passed to nodes during execution.
     Can hold references to the network, global state, etc.
@@ -977,14 +979,17 @@ class NodeNetwork(Node):
 
     async def cook_flow_control_nodes(self, node: Node, execution_stack: List[str]=None, pending_stack: Dict[str, List[str]]=None )-> None:
 
-        # Copied from test/test_node_cooking_flow.py (NodeNetworkFixes)
-        # Fixes: BFS execution, Robust Data Push, Scoped Node Lookup
-
+        # New implementation with Stack (LIFO) and Deferred Execution for Loops
+        
         if execution_stack is None:
             execution_stack = []
         if pending_stack is None:
             pending_stack = {}
     
+        # Store nodes that requested to loop again here, 
+        # preventing them from running until the current stack is empty.
+        deferred_stack = []
+
         if node.isFlowControlNode():
             self.build_flow_node_execution_stack(node, execution_stack, pending_stack)
             
@@ -994,85 +999,113 @@ class NodeNetwork(Node):
                 execution_stack.append(node_id)
                 del pending_stack[node_id]
         
+        while execution_stack or deferred_stack:
+            
+            # 1. Automatic "Next Iteration" Loading
+            # If the main stack is empty (Body finished), load the loop nodes back in.
+            if not execution_stack and deferred_stack:
+                # print("--- Batch Completed. Starting Deferred Nodes (Next Iteration) ---")
+                # Reverse to maintain stack order if needed, but usually we just want to run them.
+                execution_stack.extend(deferred_stack)
+                deferred_stack.clear()
 
+            # 2. Parallel Batch Collection
+            # Pop EVERYTHING currently in the stack. 
+            # Since dependencies are already resolved by 'pending_stack', 
+            # all nodes in 'execution_stack' are theoretically ready to run.
+            batch_ids = execution_stack[:] 
+            execution_stack.clear()
+            
+            # 3. Parallel Execution
+            if not batch_ids: continue
 
-        while execution_stack:
-            # FIX: Use BFS for safer execution order
-            cur_node_id = execution_stack.pop(0)
-          
+            # Create coroutines for all nodes in the batch
+            tasks = [self._execute_single_node(nid) for nid in batch_ids]
+            
+            # Run them all at the same time and wait for results
+            results = await asyncio.gather(*tasks)
 
-            # FIX: Use self.get_node to ensure we look in THIS network (scoped lookup)
-            # Logic adapted from NodeNetworkFixes
-            #node_short_id = cur_node_id.split('/')[-1]
-            #cur_node = self.get_node(node_short_id)
-            cur_node = self.find_node_by_id(cur_node_id) 
-                 # Fallback for cross-network references or full paths
-            #     cur_node = NodeNetwork.all_nodes.get(cur_node_id)
-           
-            assert(cur_node), f"Node '{cur_node_id}' not found in network {node.network.path} during flow control cooking"
+            # 4. Result Processing (Sequential update of graph state)
+            for (cur_node, result) in results:
+                if not cur_node or not result: continue
 
-            if cur_node: 
-                if cur_node.isNetwork():
-                    # for subnetworks, we need to propogate the network inputs first
-                    self.propogate_network_inputs_to_internal(cur_node)
+                # A. Handle Loop Backs (Deferred)
+                # Use name check to avoid Enum identity issues with module reloading/path issues in tests
+                if result.command.name == "LOOP_AGAIN":
+                     deferred_stack.append(cur_node.id)
 
-                print("")
-                print(".   Cooking node:", cur_node.name, cur_node_id)
-                print("")
-                context = ExecutionContext(cur_node).to_dict()
-
-                result = await cur_node.compute(executionContext=context)
-
-                # given a result object, deserialize the outputs back to the 
-                # node's output ports.
-                result.deserialize_result(cur_node)
-
-                self.push_data_from_node(cur_node)
-               
-               
-                if cur_node.isNetwork():
-                    # for subnetworks, we need to propogate the internal outputs back to the network outputs
-                    self.propogate_internal_node_outputs_to_network(cur_node)
-
-
+                # B. Handle Standard Flow (Immediate)
                 connected_ids = []
                 for control_name, control_value in result.control_outputs.items():
                     edges = self.get_outgoing_edges(cur_node.id, control_name)
                     next_ids = [e.to_node_id for e in edges if e.to_node_id != self.id]
                     connected_ids.extend(next_ids)
 
-        
-
-                # Update Pending Stack with next control flow nodes
+                # C. Dependency Resolution for Next Nodes
                 for next_node_id in connected_ids:
                     next_node = self.get_node_by_id(next_node_id)
                     if next_node:
                         self.build_flow_node_execution_stack(next_node, execution_stack, pending_stack)
-                    
-                    else:
-                        AssertionError(f"Next node '{next_node_id}' not found in network during flow control cooking")
-
-            # schedule next nodes that have no dependencies
+                    #else:
+                        #AssertionError(f"Next node '{next_node_id}' not found in network during flow control cooking")
+            
+            # 5. Promote Ready Nodes from Pending to Stack
+            # (Queueing them for the NEXT batch)
+            # Check dependency stack one last time to see who became ready
             for node_id in list(pending_stack.keys()):
                 deps = pending_stack[node_id]
-                if cur_node_id in deps:
-                    if len(deps) != len(set(deps)):
-                        assert(False), f"Duplicate dependencies found in pending stack for node '{node_id}'. Dependencies: {deps}"
-    
-                    deps.remove(cur_node_id)
+                
+                # Remove satisfied dependencies found in this batch
+                for finished_id in batch_ids:
+                    if finished_id in deps:
+                         deps.remove(finished_id)
+
                 if len(deps) == 0:
-                    if node_id != cur_node_id:
-                        execution_stack.append(node_id)
+                    execution_stack.append(node_id) # Add to next batch
                     del pending_stack[node_id]
 
         for node_id in pending_stack.keys():
             node = self.get_node_by_id(node_id)
             node_name = node.name if node else "Unknown"
+            print(f"Node '{node_name}' ({node_id}) still has dependencies: {pending_stack[node_id]}")
         
         assert(len(pending_stack) == 0), "Pending stack should be empty after cooking all flow control nodes"
-        #assert(False), "Debug Stop Here"
 
 
+
+    async def _execute_single_node(self, cur_node_id) -> Tuple[Optional[Node], Optional[ExecutionResult]]:
+        """Helper to execute a single node safely within a gathered batch"""
+        cur_node = self.find_node_by_id(cur_node_id)
+        
+        if not cur_node: return (None, None)
+
+        if cur_node.isNetwork():
+            self.propogate_network_inputs_to_internal(cur_node)
+
+        # Force Cook Upstream Data Dependencies (Recurisve lazy load)
+        # This fixes regression where some data nodes are skipped by stack builder
+        for input_port in cur_node.get_input_data_ports():
+             upstream_nodes = self.get_upstream_nodes(input_port)
+             for up_node in upstream_nodes:
+                 if up_node.isDataNode() and up_node.isDirty():
+                     #print(f"Lazy Cooking Dependency: {up_node.name} for {cur_node.name}")
+                     # Recursively execute the dependency
+                     await self._execute_single_node(up_node.id)
+
+        print(f".   Cooking node: {cur_node.name} ({cur_node_id})")
+        context = ExecutionContext(cur_node).to_dict()
+        result = await cur_node.compute(executionContext=context)
+        
+        # Apply side effects immediately? 
+        # In strictly parallel systems we might buffer this, but here
+        # we assume python's GIL/single-threaded async protects atomic port writes.
+        result.deserialize_result(cur_node)
+        self.push_data_from_node(cur_node)
+        
+        if cur_node.isNetwork():
+            self.propogate_internal_node_outputs_to_network(cur_node)
+            
+        return (cur_node, result)
 
     async def cook_data_nodes(self, node):
         #assert(False), "cook_data_nodes is deprecated, use cook_flow_control_nodes instead"
