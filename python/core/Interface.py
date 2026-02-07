@@ -184,7 +184,7 @@ class INode(ABC):
     
     
     @abstractmethod
-    async def compute(self, executionContext) -> ExecutionResultInterface:
+    async def compute(self, executionContext) -> IExecutionResult:
         pass
 
     @abstractmethod
@@ -199,12 +199,8 @@ class INode(ABC):
 class INodeNetwork(ABC):
     pass
 
-class ExecutionContextInterface(ABC):
+class IExecutionContext(ABC):
 
-
-    @abstractmethod
-    def get_node(self) -> 'INode':
-        pass
 
     @abstractmethod
     def get_port_value(self, port) -> Dict[str, Any]:
@@ -220,7 +216,7 @@ class ExecutionContextInterface(ABC):
 
 
 
-class ExecutionResultInterface(ABC):
+class IExecutionResult(ABC):
 
     @abstractmethod
     def deserialize_result(self, node: 'INode'):

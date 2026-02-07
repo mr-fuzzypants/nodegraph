@@ -13,139 +13,13 @@ import random
 if TYPE_CHECKING:
     from NodePort import NodePort
   
-from .Interface import ExecutionContextInterface, ExecutionResultInterface, INode, INodePort, IInputControlPort, IOutputControlPort, IInputDataPort, IOutputDataPort
+from .Interface import IExecutionContext, IExecutionResult, INode, INodePort, IInputControlPort, IOutputControlPort, IInputDataPort, IOutputDataPort
 
 from .Types import ValueType, PortFunction
 from .NodePort import NodePort, InputDataPort, OutputDataPort, InputControlPort, OutputControlPort
 from .GraphPrimitives import GraphNode
 # Get a logger for this module
 logger = logging.getLogger(__name__)
-
-
-
-# --- RUNTIME COMMAND STRUCTS (Port-Friendly) ---
-# This architecture allows the execution engine to be decoupled from the graph structure.
-# In Python, recursion is fine. In Typescript (Async) and Rust (Ownership),
-# we cannot simply call `node.compute()` recursively.
-# Instead, `compute()` returns a Command, and a central "Runner" decides what to do next.
-class ExecCommand(Enum):
-    CONTINUE = auto()   # Scheduler: Add 'next_nodes' to the execution queue
-    WAIT = auto()       # Scheduler: Pause execution (e.g. await Promise)
-    LOOP_AGAIN = auto() # Scheduler: Re-schedule this node immediately (for iterative loops)
-    COMPLETED = auto()  # Scheduler: Stop this branch of execution
-
-
-class ExecutionResult(ExecutionResultInterface):
-    
-    def __init__(self, command: ExecCommand,  control_outputs: Optional[Dict[str, Any]] = None):
-        self.command = command
-        #self.next_nodes = [] #next_nodes if next_nodes is not None else []
-        #self.next_node_ids = [] #next_node_ids if next_node_ids is not None else []
-        self.network_id= ""
-        self.node_id = ""
-        self.node_path = ""
-        self.uuid = ""
-        self.data_outputs = {}
-        # TODOL why?
-        self.control_outputs = control_outputs if control_outputs is not None else {}
-
-    
-    def deserialize_result(self, node):
-        #TODO (1): we may want to have a more formal way of returning 
-        #TODO:  output values and updating ports.
-        for output_name, output_value in self.data_outputs.items():
-            out_port = node.outputs.get(output_name)
-            if out_port:
-                out_port.value = output_value
-                out_port._isDirty = False
-
-        #TODO (2): we may want to have a more formal way of returning 
-        #TODO:  output values and updating ports.
-        for output_name, output_value in self.control_outputs.items():
-            out_port = node.outputs.get(output_name)
-            if out_port:
-                out_port.value = output_value
-                out_port._isDirty = False
-        node.markClean()
-
-
-
-class ExecutionContext(ExecutionContextInterface):
-  
-    def __init__(self, node: 'NodeBase'):
-        self.node = node
-        self.network = node.network if node else None
-        self.network_id = self.network.id if self.network else None
-
-        #self.execution_trace: List[str] = []  # Trace of executed node IDs for debugging
-        #self.custom_context: Dict[str, Any] = {}  # User-defined context data
-        #self.logger = logger  # Logger instance for nodes to use
-        #self.step_count: int = 0  # Execution step counter
-
-
-    def get_port_value(self, port) -> Dict[str, Any]:
-        incoming_edges = self.network.get_incoming_edges(port.node_id, port.port_name)
-      
-        if not incoming_edges:
-            return None
-        
-        edge = incoming_edges[0]
-        
-        source_node = self.network.get_node_by_id(edge.from_node_id)
-        #`print(". SOURCE NODE:", source_node.id, source_node.type)
-        if source_node.isNetwork():
-            #AssertionError("Source node is a Network - should not happen in this context")
-            # Check outputs first (Standard Node behavior)
-            source_port = source_node.outputs.get(edge.from_port_name)
-            if not source_port:
-                # Fallback to inputs (Tunneling/Passthrough for Network Nodes)
-                #print(". SOURCE NODE IS A NETWORK - Checking Inputs for Tunneling")
-                source_port = source_node.inputs.get(edge.from_port_name)
-                #print(". -> SOURCE PORT FROM NETWORK INPUT:", source_port.port_name, source_port.value,  source_port.isInputOutputPort() if source_port else "None")
-        else:
-            source_port = source_node.outputs.get(edge.from_port_name)  
-
-        if source_port is None:
-            raise ValueError(f"Source port '{edge.from_port_name}' not found on node '{source_node.id}'")   
-        
-        return source_port.value
-
-    def to_dict(self) -> Dict[str, Any]:
-
-        
-        #print("Building execution context for node:", self.node.id, self.node.type)
-        data_inputs = {}
-        control_inputs = {}
-        for port_name, port in self.node.inputs.items():
-            if port.isDataPort():
-                data_inputs[port_name] = self.get_port_value(port)
-            elif port.isControlPort():
-                control_inputs[port_name] = self.get_port_value(port)
-                #control_inputs[port_name] = port.isActive()
-
-        result = {
-            "uuid": self.node.uuid,
-            "network_id": self.network_id if self.network else None,
-            "node_id": self.node.id,
-            "node_path": self.node.path,
-            "data_inputs": data_inputs,
-            "control_inputs": control_inputs
-        }
-
-        return result
-
-    def from_dict(self, context_dict: Dict[str, Any]):
-        for port_name, value in context_dict.get("data_inputs", {}).items():
-            port = self.node.inputs.get(port_name)
-            port.value = value
-            port._isDirty = False
-
-        for port_name, value in context_dict.get("control_inputs", {}).items():
-            port = self.node.inputs.get(port_name)
-            port.value = value
-            port._isDirty = False   
-
-
 
 
 
@@ -389,7 +263,7 @@ class Node(INode):
 
     
     @abstractmethod
-    async def compute(self, executionContext) -> ExecutionResult:
+    async def compute(self, executionContext) -> IExecutionResult:
         pass
 
     def compile(self, builder: Any):
