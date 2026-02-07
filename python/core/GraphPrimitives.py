@@ -3,6 +3,7 @@ from typing import Tuple, NamedTuple, Dict, List, Optional
 from collections import  defaultdict
 
 import uuid
+from .Interface import IGraphNode, INodePort, INode, INodeNetwork
 
 # Defining Edge as a simple data structure
 # Using NamedTuple for immutability and simple hashability if needed later
@@ -21,7 +22,7 @@ class Edge(NamedTuple):
 
 # Base class for Nodes. Will be subclassed by actual node implementations. 
 # Contains common properties and methods required for graph traversal.
-class GraphNode:
+class GraphNode(IGraphNode):
     def __init__(self, 
                  name: str, 
                  type: str, 
@@ -36,24 +37,20 @@ class GraphNode:
         return f"GraphNode({self.id})" 
 
 class Graph:
-    #all_nodes = {}  # type: Dict[str, 'GraphNode']
-    #all_nodes_by_id = {}  # type: Dict[str, 'GraphNode']
-
-    nodes: Dict[str, GraphNode] = {}  # Dictionary of nodes in the net
-    edges: List[Edge] = [] # Centralized connection storage (Arena Pattern)
-
-    incoming_edges = defaultdict(list)  # type: Dict[Tuple[str, str], List[Edge]]
-    outgoing_edges = defaultdict(list)  # type: Dict[Tuple[str, str], List[Edge]]
 
     def __init__(self):
-        pass
+        self.nodes: Dict[str, IGraphNode] = {}  # Dictionary of nodes in the net
+        self.edges: List[Edge] = [] # Centralized connection storage (Arena Pattern)
+
+        self.incoming_edges = defaultdict(list)  # type: Dict[Tuple[str, str], List[Edge]]
+        self.outgoing_edges = defaultdict(list)  # type: Dict[Tuple[str, str], List[Edge]]
     
      # find a node in all networks by id
-    def find_node_by_id(self, uid: str) -> Optional[GraphNode]:
+    def find_node_by_id(self, uid: str) -> Optional[IGraphNode]:
         return self.nodes.get(uid)
     
 
-    def add_edge(self, from_node_id: str, from_port_name: str, to_node_id: str, to_port_name: str):
+    def add_edge(self, from_node_id: str, from_port_name: str, to_node_id: str, to_port_name: str) -> Edge:
         # Validation could happen here or in upper layers
         edge = Edge(from_node_id, from_port_name, to_node_id, to_port_name)
         self.edges.append(edge)
@@ -70,7 +67,7 @@ class Graph:
         
 
 
-    def add_node(self, node: GraphNode):
+    def add_node(self, node: IGraphNode) -> None:
         #if self.find_node(node.id):
         #    raise ValueError(f"Node with id '{node.id}' already exists in the global node registry {NodeNetwork.all_nodes.keys()}")
         if self.nodes.get(node.id):
@@ -88,24 +85,23 @@ class Graph:
 
     
     # TODO: this should be get_node_by_id for clarity
-    def get_node_by_id(self, node_id: str) -> Optional[str]:
+    def get_node_by_id(self, node_id: str) -> Optional[IGraphNode]:
         return self.nodes.get(node_id)
 
     # This method looks at nodes LOCAL to this network only
-    def get_node_by_name(self, name: str) -> Optional[str]:
+    def get_node_by_name(self, name: str) -> Optional[IGraphNode]:
         for node in self.nodes.values():
             if node.name == name:
                 return node
         return None
     
-    def get_node_by_path(self, path: str) -> Optional[GraphNode]:
-        #return NodeNetwork.graph.get_node_by_path(path)
+    def get_node_by_path(self, path: str) -> Optional[IGraphNode]:
         for node in self.nodes.values():
             if self.get_path(node.id) == path:
                 return node
         return None
     
-    def getNode(self, node_id: str) -> Optional[GraphNode]:
+    def getNode(self, node_id: str) -> Optional[IGraphNode]:
         return self.get_node_by_id(node_id)
 
      # convenience method to get the network node object from the network id
@@ -144,7 +140,7 @@ class Graph:
         return full_path
     
 
-    def deleteNode(self, name: str):
+    def deleteNode(self, name: str) -> None: 
     
         
         node = self.get_node_by_id(name)
@@ -165,4 +161,28 @@ class Graph:
         self.edges.clear()
         self.incoming_edges.clear()
         self.outgoing_edges.clear()
+
+    def get_upstream_nodes(self, port: INodePort) -> List[IGraphNode]:
+        upstream_nodes = []
+
+        incoming_edges = self.get_incoming_edges(port.node_id, port.port_name)
+        
+        for edge in incoming_edges:
+            src_node = self.get_node_by_id(edge.from_node_id)
+            if src_node and src_node not in upstream_nodes:
+                upstream_nodes.append(src_node)
+        
+        return upstream_nodes
+    
+    def get_downstream_nodes(self, port: INodePort) -> List[IGraphNode]:
+        downstream_nodes = []
+        outgoing_edges = self.get_outgoing_edges(port.node_id, port.port_name)
+
+        for edge in outgoing_edges:
+            dest_node = self.get_node_by_id(edge.to_node_id)
+            if dest_node and dest_node not in downstream_nodes:
+                downstream_nodes.append(dest_node)
+        
+        return downstream_nodes
+    
     

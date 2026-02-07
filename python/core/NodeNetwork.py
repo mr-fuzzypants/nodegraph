@@ -90,14 +90,17 @@ class ExecutionContext(IExecutionContext):
 
 
     def get_port_value(self, port) -> Dict[str, Any]:
-        incoming_edges = NodeNetwork.graph.get_incoming_edges(port.node_id, port.port_name)
+        if not self.node.graph:
+             raise ValueError(f"Node {self.node.id} has no graph context")
+
+        incoming_edges = self.node.graph.get_incoming_edges(port.node_id, port.port_name)
       
         if not incoming_edges:
             return None
         
         edge = incoming_edges[0]
         
-        source_node = NodeNetwork.graph.get_node_by_id(edge.from_node_id)
+        source_node = self.node.graph.get_node_by_id(edge.from_node_id)
         #`print(". SOURCE NODE:", source_node.id, source_node.type)
         if source_node.isNetwork():
             #AssertionError("Source node is a Network - should not happen in this context")
@@ -156,7 +159,7 @@ class ExecutionContext(IExecutionContext):
 
 class NodeNetwork(Node):
     _network_registry: Dict[str, Type['Node']] = {}
-    graph: Graph = Graph()  # Shared graph context for all networks
+    # graph: Graph = Graph()  # Shared graph context for all networks (REMOVED: Instance based)
 
     @classmethod
     def register(cls, type_name: str) -> Callable[[Type['NodeNetwork']], Type['NodeNetwork']]:
@@ -181,17 +184,20 @@ class NodeNetwork(Node):
         node_class = cls._network_registry[type_name]
         new_node = node_class(node_name, type_name, *args, **kwargs)
 
-        NodeNetwork.graph.add_node(new_node)
+        if hasattr(new_node, 'graph') and new_node.graph:
+             new_node.graph.add_node(new_node)
         
         print("!!!!!!!!!!!!! Created NodeNetwork of type:", type_name, " with id:", node_name, new_node.id)
         #assert(False)
         return new_node
 
 
-    def __init__(self, id: str, type, network_id):
+    def __init__(self, id: str, type, network_id, graph: Optional[Graph] = None):
         super().__init__(id, type=type, network_id=network_id)
         #self.nodes: Dict[str, Node] = {}  # Dictionary of nodes in the net
         #self.edges: List[Edge] = [] # Centralized connection storage (Arena Pattern)
+        
+        self.graph = graph
 
         self.network_id = network_id  # Placeholder
 
@@ -209,6 +215,8 @@ class NodeNetwork(Node):
     
         #NodeNetwork.graph.add_node(self)
         self.path = "UNSet"
+
+        
     
     def isNetwork(self) -> bool:
         return True
@@ -221,20 +229,20 @@ class NodeNetwork(Node):
 
     # find a node in all networks by id
     def find_node_by_id(self, uid: str) -> Optional[Node]:
-        return NodeNetwork.graph.find_node_by_id(uid)
+        return self.graph.find_node_by_id(uid)
     
     
     # TODO: this should be get_node_by_id for clarity
     def get_node_by_id(self, node_id: str) -> Optional[Node]:
-        return NodeNetwork.graph.get_node_by_id(node_id)
+        return self.graph.get_node_by_id(node_id)
 
     # This method looks at nodes LOCAL to this network only
     def get_node_by_name(self, name: str) -> Optional[Node]:
-        return NodeNetwork.graph.get_node_by_name(name)
+        return self.graph.get_node_by_name(name)
         
     
     def get_node_by_path(self, path: str) -> Optional[Node]:
-        return NodeNetwork.graph.get_node_by_path(path)
+        return self.graph.get_node_by_path(path)
        
     
         
@@ -567,8 +575,10 @@ class NodeNetwork(Node):
 
     @classmethod
     def createRootNetwork(cls, name: str, type:str) -> 'NodeNetwork':
-
-        network = NodeNetwork.create_network(name, type, network=None)
+        
+        # Create a new graph context for this root network
+        graph = Graph()
+        network = NodeNetwork.create_network(name, type, network_id=None, graph=graph)
         print("####Created Root Network node with id:", network.id)
         return network
     
@@ -580,10 +590,10 @@ class NodeNetwork(Node):
         print("Creating sub-network:", name, "in network:", self.name, " of path:", node_path)
 
         if self.get_node_by_path(node_path):
-            raise ValueError(f"Node with id '{id}' already exists in the network")
+            raise ValueError(f"Node with id '{name}' already exists in the network")
        
 
-        network = NodeNetwork.create_network(name, type, self.id)
+        network = NodeNetwork.create_network(name, type, network_id=self.id, graph=self.graph)
       
         print(".  ####Added Network node to parent network:", self.name, " with id:", network.id)
     
@@ -612,7 +622,8 @@ class NodeNetwork(Node):
             # Re-raise with context if needed, or let it bubble
             raise ValueError(f"Error creating node '{type}': {e}")
 
-        NodeNetwork.graph.add_node(node)
+        self.graph.add_node(node)
+        node.graph = self.graph
         return node
     
     
@@ -696,7 +707,7 @@ class NodeNetwork(Node):
         print(" ---- Deleting node with name:", name, "from network:", self.name, self.id, self.isNetwork())
         print(".   -- networkId:", self.id)
 
-        for graph_node in NodeNetwork.graph.nodes.values():
+        for graph_node in self.graph.nodes.values():
             print(".   -- Graph Node:", graph_node.name, graph_node.id, " in network:", graph_node.network_id)  
 
         network_path = self.graph.get_path(self.id)
@@ -715,7 +726,7 @@ class NodeNetwork(Node):
         # This cleanup is critical in Rust/TS to prevent orphaned pointers
         #del self.nodes[id]
 
-        NodeNetwork.graph.deleteNode(id)
+        self.graph.deleteNode(id)
 
     @classmethod
     def deleteAllNodes(cls):
@@ -727,7 +738,7 @@ class NodeNetwork(Node):
         #cls.incoming_edges.clear()
         #cls.outgoing_edges.clear()
 
-        NodeNetwork.graph.reset()
+        pass # Global graph is removed. Tests should instantiate new graphs.
 
 
     """"""
@@ -764,6 +775,7 @@ class NodeNetwork(Node):
             
         return downstream_ports
 
+    # NOTE: used by get_input_port_value to look upstream for the source of truth for a port's value. This is necessary because of tunneling through I/O ports, where the value may actually be coming from further upstream than the immediate connection.
     def get_upstream_ports(self, port: NodePort, include_io_ports: bool=False) -> List[NodePort]:
         
         #assert(False), "get_upstream_ports is deprecated, use port.get_upstream_ports instead"
@@ -792,6 +804,8 @@ class NodeNetwork(Node):
     # For an input port, get its value by looking upstream. Once the value is found,
     # propagate that value to all upstream ports from the source to mark them clean.
     def get_input_port_value(self, port: NodePort) -> Any:
+        
+        
         if port._isDirty:
             if port.isInputPort() or port.isInputOutputPort():
                 #port_node = self.get_node_by_id(port.node_id)
@@ -813,6 +827,8 @@ class NodeNetwork(Node):
     
 
     def get_upstream_nodes(self, port: NodePort) -> List[Node]:
+        return self.graph.get_upstream_nodes(port)
+    
         upstream_nodes = []
         #incoming_edges = port.node.network.get_incoming_edges(port.node.id, port.port_name)
         incoming_edges = self.get_incoming_edges(port.node_id, port.port_name)
@@ -826,6 +842,7 @@ class NodeNetwork(Node):
         return upstream_nodes
 
     def get_downstream_nodes(self, port: NodePort) -> List[Node]:
+        return self.graph.get_downstream_nodes(port)
         downstream_nodes = []
         #outgoing_edges = port.node.network.get_outgoing_edges(port.node.id, port.port_name)
         outgoing_edges = self.get_outgoing_edges(port.node_id, port.port_name)
@@ -1160,8 +1177,8 @@ class NodeNetwork(Node):
     
 @NodeNetwork.register("NodeNetworkSystem")
 class NodeNetworkSystem(NodeNetwork):
-    def __init__(self, id, type="NodeNetworkSystem", network_id=None, **kwargs):
-        super().__init__(id, type=type, network_id=network_id)
+    def __init__(self, id, type="NodeNetworkSystem", network_id=None, graph=None, **kwargs):
+        super().__init__(id, type=type, network_id=network_id, graph=graph)
         #self.type = "NodeNetworkRoot"
         self.is_flow_control_node = True
         self.cooking_internally = False
@@ -1175,8 +1192,8 @@ class NodeNetworkSystem(NodeNetwork):
 
 @NodeNetwork.register("FlowNodeNetwork")
 class FlowNodeNetwork(NodeNetwork):
-    def __init__(self, id, type="FlowNodeNetwork", network=None, **kwargs):
-        super().__init__(id, type=type, network=network)
+    def __init__(self, id, type="FlowNodeNetwork", network_id=None, graph=None, **kwargs):
+        super().__init__(id, type=type, network_id=network_id, graph=graph)
         #self.type = "NodeNetworkRoot"
         self.is_flow_control_node = True
         self._isDirty = True

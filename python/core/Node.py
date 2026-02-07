@@ -71,6 +71,7 @@ class Node(INode):
         self.is_loop_node = False 
         self._isDirty = True  
         self.network_id = network_id
+        self.graph = None # Will be set by the NodeNetwork when added
         self.path= " path node computed at runtime " # This is a bit of a hack, but it allows us to have a path property that is computed at runtime based on the network structure. In Rust/TS, we can compute this on demand or cache it as needed.
 
    

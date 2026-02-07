@@ -67,7 +67,23 @@ class IOutputDataPort(INodePort):
     pass
 
 
-class INode(ABC):
+# Base class for Nodes. Will be subclassed by actual node implementations. 
+# Contains common properties and methods required for graph traversal.
+class IGraphNode(ABC):
+    def __init__(self, 
+                 name: str, 
+                 type: str, 
+                 network_id: str = None
+                    ):
+        self.name = name
+        self.id = uuid.uuid4().hex
+        self.uuid = uuid.uuid4().hex  # Unique identifier for the node instance
+        self.network_id = network_id
+
+    def __repr__(self):
+        return f"GraphNode({self.id})" 
+
+class INode(IGraphNode):
     @abstractmethod
     def isNetwork(self) -> bool:
         pass
