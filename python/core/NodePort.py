@@ -164,24 +164,24 @@ class ControlPort(NodePort):
 
 
 class InputDataPort(DataPort):
-    def __init__(self, node_id, port_name, data_type=DataType.ANY):
+    def __init__(self, node_id: str, port_name: str, data_type=DataType.ANY):
         super().__init__(node_id, port_name, PORT_TYPE_INPUT, data_type=data_type)
         self.incoming_connections = []
 
 class InputControlPort(ControlPort):
-    def __init__(self, node_id, port_name):
+    def __init__(self, node_id: str, port_name: str):
         super().__init__(node_id, port_name, PORT_TYPE_INPUT | PORT_TYPE_CONTROL)
         self.incoming_connections = []
 
 class InputOutputDataPort(DataPort):
-    def __init__(self, node_id, port_name, data_type=DataType.ANY):
+    def __init__(self, node_id: str, port_name: str, data_type=DataType.ANY):
         super().__init__(node_id, port_name, PORT_TYPE_INPUTOUTPUT, data_type=data_type)
 
         self.incoming_connections = []
         self.outgoing_connections = []
 
 class InputOutputControlPort(ControlPort):
-    def __init__(self, node_id, port_name):
+    def __init__(self, node_id: str, port_name: str):
         super().__init__(node_id, port_name, PORT_TYPE_INPUTOUTPUT | PORT_TYPE_CONTROL)
 
         self.incoming_connections = []
@@ -190,13 +190,13 @@ class InputOutputControlPort(ControlPort):
     
 
 class OutputDataPort(DataPort):
-    def __init__(self, node_id, port_name, data_type=DataType.ANY):
+    def __init__(self, node_id: str, port_name: str, data_type=DataType.ANY):
         super().__init__(node_id, port_name, PORT_TYPE_OUTPUT, data_type=data_type)
         self.outgoing_connections = []
 
         
 class OutputControlPort(ControlPort):
-    def __init__(self, node_id, port_name):
+    def __init__(self, node_id: str, port_name: str):
         super().__init__(node_id, port_name, PORT_TYPE_OUTPUT | PORT_TYPE_CONTROL)
         self.outgoing_connections = []
 
