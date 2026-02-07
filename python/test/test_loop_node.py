@@ -106,10 +106,10 @@ class TestLoopNode:
             
             # Create Connections
             # loop.loop_body -> counter.exec
-            net.add_edge(loop_node.id, "loop_body", counter.id, "exec")
+            net.graph.add_edge(loop_node.id, "loop_body", counter.id, "exec")
             
             # loop.index -> counter.val
-            net.add_edge(loop_node.id, "index", counter.id, "val")
+            net.graph.add_edge(loop_node.id, "index", counter.id, "val")
             
             # Run
             print("\nStarting Loop Test")
@@ -135,12 +135,12 @@ class TestLoopNode:
             loop_node.inputs["end"].setValue(3)
             
             # Connect loop_body to BOTH counters
-            net.add_edge(loop_node.id, "loop_body", counter_a.id, "exec")
-            net.add_edge(loop_node.id, "loop_body", counter_b.id, "exec")
+            net.graph.add_edge(loop_node.id, "loop_body", counter_a.id, "exec")
+            net.graph.add_edge(loop_node.id, "loop_body", counter_b.id, "exec")
             
             # Connect index to both
-            net.add_edge(loop_node.id, "index", counter_a.id, "val")
-            net.add_edge(loop_node.id, "index", counter_b.id, "val")
+            net.graph.add_edge(loop_node.id, "index", counter_a.id, "val")
+            net.graph.add_edge(loop_node.id, "index", counter_b.id, "val")
             
             print("\nStarting Parallel Loop Test")
             await net.cook_flow_control_nodes(loop_node)
@@ -173,14 +173,14 @@ class TestLoopNode:
             
             # Connections
             # 1. Outer Loop Body -> Inner Loop Exec
-            net.add_edge(outer_loop.id, "loop_body", inner_loop.id, "exec")
+            net.graph.add_edge(outer_loop.id, "loop_body", inner_loop.id, "exec")
             
             # 2. Inner Loop Body -> Counter Exec
-            net.add_edge(inner_loop.id, "loop_body", counter.id, "exec")
+            net.graph.add_edge(inner_loop.id, "loop_body", counter.id, "exec")
             
             # 3. Data Connections (Optional logging)
             # We connect inner loop index to counter val just to check last value
-            net.add_edge(inner_loop.id, "index", counter.id, "val")
+            net.graph.add_edge(inner_loop.id, "index", counter.id, "val")
 
             # Run
             print("\nStarting Nested Loop Test")

@@ -69,7 +69,7 @@ class TestNodeCooking:
         #net.add_edge("A", "out", "B", "in")
         net.connectNodes("A", "out", "B", "in")
 
-        assert net.get_incoming_edges(node_b.id, "in"), "Node B should have incoming edges"
+        assert net.graph.get_incoming_edges(node_b.id, "in"), "Node B should have incoming edges"
         
         # Action
         asyncio.run(net.cook_data_nodes(node_b))

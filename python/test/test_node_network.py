@@ -85,7 +85,7 @@ class TestNodeNetwork:
         
         assert node.name == "n1"
         assert node.type == "MockNode"
-        assert net.get_node_by_name("n1") == node
+        assert net.graph.get_node_by_name("n1") == node
         
         # Test duplicate ID protection
         with pytest.raises(ValueError):
@@ -101,7 +101,7 @@ class TestNodeNetwork:
         
         assert subnet.name == "subnet1"
         assert subnet.network_id == root.id
-        assert root.get_node_by_name("subnet1") == subnet
+        assert root.graph.get_node_by_name("subnet1") == subnet
         assert subnet.isSubnetwork() is True
         assert subnet.isRootNetwork() is False
         
@@ -142,17 +142,17 @@ class TestNodeNetwork:
         edge = net.connectNodes("A", "out", "B", "in")
         
         assert isinstance(edge, Edge) or isinstance(edge, tuple)
-        assert net.find_node_by_id(edge.from_node_id).name == "A"
+        assert net.graph.get_node_by_id(edge.from_node_id).name == "A"
         assert edge.from_port_name == "out"
-        assert net.find_node_by_id(edge.to_node_id).name == "B"
+        assert net.graph.get_node_by_id(edge.to_node_id).name == "B"
         assert edge.to_port_name == "in"
         
         # Check edges in Arena
-        edges = net.get_outgoing_edges(node_a.id, "out")
+        edges = net.graph.get_outgoing_edges(node_a.id, "out")
         assert len(edges) == 1
         assert edges[0] == edge
         
-        edges_in = net.get_incoming_edges(node_b.id, "in")
+        edges_in = net.graph.get_incoming_edges(node_b.id, "in")
         assert len(edges_in) == 1
 
     def test_connect_node_not_found(self):
@@ -179,11 +179,11 @@ class TestNodeNetwork:
         
         # Check edge existence in the Network Arena
         # The 'Tunnel' edge is stored as (NetworkID, PortName) -> (NodeID, PortName)
-        edges = net.get_outgoing_edges(net.id, "sys_start")
+        edges = net.graph.get_outgoing_edges(net.id, "sys_start")
         assert len(edges) == 1
         edge = edges[0]
         assert edge.from_node_id == net.id
-        assert net.find_node_by_id(edge.to_node_id).name == "inner"
+        assert net.graph.get_node_by_id(edge.to_node_id).name == "inner"
 
     def test_delete_node(self):
         net = NodeNetwork.createRootNetwork("root_net", "NodeNetworkSystem")
@@ -199,7 +199,7 @@ class TestNodeNetwork:
         
         net.deleteNode("A")
         network_path = net.graph.get_path(net.id)
-        assert net.get_node_by_path(f"{network_path}:A") is None
+        assert net.graph.get_node_by_path(f"{network_path}:A") is None
         
         # Verify connections cleanup    
         assert len(net.graph.edges) == 0
@@ -304,10 +304,10 @@ class TestNodeNetwork:
         relay_port = relay_node.add_data_input_port("io_port")
         
         # Edge 1: n1 -> relay
-        net.add_edge(n1.id, "data_out", relay_node.id, "io_port")
+        net.graph.add_edge(n1.id, "data_out", relay_node.id, "io_port")
         
         # Edge 2: relay -> n2
-        net.add_edge(relay_node.id, "io_port", n2.id, "data_in")
+        net.graph.add_edge(relay_node.id, "io_port", n2.id, "data_in")
         
         # Test
         src_port = n1.outputs["data_out"]
@@ -338,10 +338,10 @@ class TestNodeNetwork:
         relay_port = relay_node.add_data_input_port("io_port")
         
         # Edge 1: n1 -> relay
-        net.add_edge(n1.id, "data_out", relay_node.id, "io_port")
+        net.graph.add_edge(n1.id, "data_out", relay_node.id, "io_port")
         
         # Edge 2: relay -> n2
-        net.add_edge(relay_node.id, "io_port", n2.id, "data_in")
+        net.graph.add_edge(relay_node.id, "io_port", n2.id, "data_in")
         
         # Test upstream from n2
         target_port = n2.inputs["data_in"]
@@ -359,7 +359,7 @@ class TestNodeNetwork:
         n2 = net.createNode("n2", "MockNode")
 
         # Connect n1.data_out -> n2.data_in
-        net.add_edge(n1.id, "data_out", n2.id, "data_in")
+        net.graph.add_edge(n1.id, "data_out", n2.id, "data_in")
 
         # Set source value
         n1.outputs["data_out"].value = 99
@@ -388,8 +388,8 @@ class TestNodeNetwork:
 
         print(n1.outputs)
 
-        net.add_edge(n1.id, "data_out", n3.id, "data_in")
-        net.add_edge(n2.id, "data_out", n3.id, "data_in")
+        net.graph.add_edge(n1.id, "data_out", n3.id, "data_in")
+        net.graph.add_edge(n2.id, "data_out", n3.id, "data_in")
 
         n1.outputs["data_out"].value = 10
         n2.outputs["data_out"].value = 20
