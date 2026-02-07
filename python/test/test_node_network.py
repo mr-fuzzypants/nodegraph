@@ -97,18 +97,18 @@ class TestNodeNetwork:
         root = NodeNetwork.create_network("root", "NodeNetworkSystem", None)
 
         #subnet = root.createNetwork("subnet1")
-        subnet = NodeNetwork.create_network("subnet1", "NodeNetworkSystem", root)
+        subnet = NodeNetwork.create_network("subnet1", "NodeNetworkSystem", root.id)
         
         assert subnet.name == "subnet1"
-        assert subnet.network == root
+        assert subnet.network_id == root.id
         assert root.get_node_by_name("subnet1") == subnet
         assert subnet.isSubnetwork() is True
         assert subnet.isRootNetwork() is False
         
         # Ensure deep nesting works
         #subsubnet = subnet.createNetwork("deep_net")
-        subsubnet = NodeNetwork.create_network("deep_net", "NodeNetworkSystem", subnet)
-        assert subsubnet.network == subnet
+        subsubnet = NodeNetwork.create_network("deep_net", "NodeNetworkSystem", subnet.id)
+        assert subsubnet.network_id == subnet.id
 
     def test_add_network_ports(self):
         """Test adding Tunnel/InputOutput ports to the network boundary"""
@@ -299,7 +299,7 @@ class TestNodeNetwork:
         
         # Relay node
         #relay_node = net.createNetwork("relay") 
-        relay_node = NodeNetwork.create_network("relay", "NodeNetworkSystem", net)
+        relay_node = NodeNetwork.create_network("relay", "NodeNetworkSystem", net.id)
         # Add a port that is technically in 'inputs' but has INPUT_OUTPUT direction
         relay_port = relay_node.add_data_input_port("io_port")
         
@@ -334,7 +334,7 @@ class TestNodeNetwork:
         n2 = net.createNode("n2", "MockNode")
         
         #relay_node = net.createNetwork("relay") 
-        relay_node = NodeNetwork.create_network("relay", "NodeNetworkSystem", net)
+        relay_node = NodeNetwork.create_network("relay", "NodeNetworkSystem", net.id)
         relay_port = relay_node.add_data_input_port("io_port")
         
         # Edge 1: n1 -> relay

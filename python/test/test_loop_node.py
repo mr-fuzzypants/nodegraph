@@ -15,8 +15,8 @@ from nodegraph.python.core.NodePort import InputControlPort, OutputControlPort, 
 # Define ForLoopNode locally for test
 @Node.register("ForLoopNode")
 class ForLoopNode(Node):
-    def __init__(self, id, type="ForLoopNode", network=None, **kwargs):
-        super().__init__(id, type, network=network, **kwargs)
+    def __init__(self, id, type="ForLoopNode", network_id=None, **kwargs):
+        super().__init__(id, type, network_id=network_id, **kwargs)
         self.is_flow_control_node = True
         
         # State to track iteration
@@ -70,8 +70,8 @@ class ForLoopNode(Node):
 
 @Node.register("CounterNode")
 class CounterNode(Node):
-    def __init__(self, id, type="CounterNode", network=None, **kwargs):
-        super().__init__(id, type, network=network, **kwargs)
+    def __init__(self, id, type="CounterNode", network_id=None, **kwargs):
+        super().__init__(id, type, network_id=network_id, **kwargs)
         self.is_flow_control_node = True
         self.inputs["exec"] = InputControlPort(self.id, "exec")
         self.inputs["val"] = InputDataPort(self.id, "val", ValueType.INT)

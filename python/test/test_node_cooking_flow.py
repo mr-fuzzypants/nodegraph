@@ -38,26 +38,15 @@ class FlowTestNode(Node):
         print(f"COMPUTING FLOW NODE: {self.name}")
         EXECUTION_LOG.append(self.name)
         
-        # Determine next nodes based on outgoing connections from 'next'
-        # In a real runner, the node might conditionally choose output ports.
-        # Here we mock checking the 'next' port.
-        next_ids = []
-        if self.network:
-            edges = self.network.get_outgoing_edges(self.id, "next")
-            next_ids = [e.to_node_id for e in edges]
-        
+       
         result = ExecutionResult(ExecCommand.CONTINUE)
-        """
-         "network_id": self.network.id if self.network else None,
-            "node_id": self.node.id,
-            "node_path:": self.node.get_path(),
-        """
+        
         result.network_id = executionContext["network_id"] 
         result.node_id = executionContext["node_id"] 
         result.node_path = executionContext["node_path"] 
         result.uuid = executionContext["uuid"] 
         result.control_outputs["next"] = True  # Activate 'next' port
-        result.next_node_ids = next_ids
+        
         return result
 
 @Node.register("DataTestNode")
@@ -107,8 +96,8 @@ class MathAddNode(Node):
 
 @NodeNetwork.register("MockSubnetNode")
 class MockSubnetNode(NodeNetwork):
-    def __init__(self, id, type, network=None, **kwargs):
-        super().__init__(id, type,  network=network)
+    def __init__(self, id, type, network_id=None, **kwargs):
+        super().__init__(id, type,  network_id=network_id)
         self.type = "MockSubnetNode"
         self.is_flow_control_node = True
         self.cooking_internally = False

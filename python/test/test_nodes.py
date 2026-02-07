@@ -13,8 +13,8 @@ from nodegraph.python.core.NodeNetwork import ExecutionContext, ExecutionResult
     
 @Node.register("MockNodeOne")
 class MockNodeOne(Node):
-    def __init__(self, name, type="MockNode", network=None, **kwargs):
-        super().__init__(name, type, network=network, **kwargs)
+    def __init__(self, name, type="MockNode", network_id=None, **kwargs):
+        super().__init__(name, type, network_id=network_id, **kwargs)
         
     async def compute(self):
         return ExecutionResult(ExecCommand.CONTINUE, [])
