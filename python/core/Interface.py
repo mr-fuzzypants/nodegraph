@@ -13,7 +13,46 @@ from .Types import ValueType, PortFunction, PortDirection
 
 
 class INodePort(ABC):
-    pass
+    @abstractmethod
+    def markDirty(self):
+        pass
+            
+    @abstractmethod
+    def markClean(self):
+       pass
+
+    @abstractmethod
+    def isDirty(self) -> bool:
+        pass
+
+    @abstractmethod
+    def isDataPort(self) -> bool:
+        pass
+    
+    @abstractmethod
+    def isControlPort(self) -> bool:
+        pass
+    
+    @abstractmethod
+    def isInputPort(self) -> bool:
+        pass
+    
+    @abstractmethod
+    def isOutputPort(self) -> bool:
+        pass    
+    
+    @abstractmethod
+    def isInputOutputPort(self) -> bool:
+       pass
+    
+    @abstractmethod
+    def setValue(self, value: Any):
+        pass
+     
+    # Check to see if my port is dirty. If it is, then 
+    @abstractmethod
+    def getValue(self) -> Any:
+        pass
 
 class IInputControlPort(INodePort):
     pass
@@ -150,16 +189,10 @@ class INode(ABC):
 
     @abstractmethod
     def compile(self, builder: Any):
-        """
-        [Compile Phase]
-        Does NOT run the node. Instead, emits Intermediate Representation (IR) instructions
-        to the 'builder'. This IR allows generation of AssemblyScript, WASM, or Optimized Rust.
-        """
         pass
-       
+
     @abstractmethod
     def generate_IRC(self):
-        # Placeholder for generating intermediate representation code for this node
         pass
 
 
@@ -192,3 +225,7 @@ class ExecutionResultInterface(ABC):
     @abstractmethod
     def deserialize_result(self, node: 'INode'):
         pass
+
+
+class NetworkRunnerInterface(ABC):
+    pass
