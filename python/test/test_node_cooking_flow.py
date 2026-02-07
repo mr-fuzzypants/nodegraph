@@ -7,7 +7,7 @@ from typing import List, Dict
 # Adjust path to find modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
 
-from nodegraph.python.core.Node import Node, ExecutionResult, ExecCommand
+from nodegraph.python.core.Node import Node
 from nodegraph.python.core.NodeNetwork import NodeNetwork, ExecutionContext, ExecutionResult, ExecCommand
 from nodegraph.python.core.NodePort import InputControlPort, OutputControlPort, InputDataPort, OutputDataPort
 from nodegraph.python.core.Types import ValueType

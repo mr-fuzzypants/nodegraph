@@ -8,8 +8,8 @@ from nodegraph.python.core.NodePort import DataPort, ControlPort
 from nodegraph.python.core.Types import ValueType
 
 
-from nodegraph.python.core.Node import Node, ExecCommand, ExecutionResult
-
+from nodegraph.python.core.Node import Node
+from nodegraph.python.core.NodeNetwork import ExecutionContext, ExecutionResult
     
 @Node.register("MockNodeOne")
 class MockNodeOne(Node):

@@ -8,8 +8,9 @@ from typing import Optional, List
 # Adjust path to find modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
 
-from nodegraph.python.core.Node import Node, ExecCommand, ExecutionResult
-from nodegraph.python.core.NodeNetwork import NodeNetwork
+from nodegraph.python.core.Node import Node
+from nodegraph.python.core.NodeNetwork import NodeNetwork, ExecutionResult, ExecutionContext, ExecCommand
+from nodegraph.python.core.Types import ValueType
 from nodegraph.python.core.GraphPrimitives import Edge
 from nodegraph.python.core.NodePort import (
     NodePort, 
