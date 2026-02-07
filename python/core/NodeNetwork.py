@@ -505,71 +505,7 @@ class NodeNetwork(Node):
              ExecutionContext(self).from_dict(executionContext)
 
         assert(self.isNetwork()), "compute() called on non-network node"
-        """"
-        # this is a precompute function for subnetworks
-        print("=== PRE-Computing NodeNetwork Subnet:", self.name, " with id:", self.id)
-        # 2. Tunnel Inputs: Propagate Input Data from Subnet Ports to Internal Nodes
-        for port_name, port in self.inputs.items():
-            if port.isDataPort() and port.value is not None:
-                edges = self.get_outgoing_edges(self.id, port_name)
-                for edge in edges:
-                    target_node = self.get_node_by_id(edge.to_node_id)
-                    print("@@@@ Tunneling input port", port_name, "value", port.value, "to internal node", edge.to_node_id, "port", edge.to_port_name)
-                    if target_node:
-                        # Push to internal node ports
-                        if edge.to_port_name in target_node.inputs:
-                            target_node.inputs[edge.to_port_name].value = port.value
-                        elif edge.to_port_name in target_node.outputs:
-                            # Edge case: pushing to an output (passthrough?)
-                            target_node.outputs[edge.to_port_name].value = port.value
-        """
-
-        """
-        # 3. Determine Internal Start Nodes
-        print("======= Building execition lost for Subnet:", self.name, " with id:", self.id)
-        internal_start_nodes = []
-        if start_nodes:
-            internal_start_nodes = start_nodes
-        elif "exec" in self.inputs:
-            # Automatic start: Find internal nodes connected to the 'exec' input
-            edges = self.get_outgoing_edges(self.id, "exec")
-            for edge in edges:
-                node = self.get_node_by_id(edge.to_node_id)
-                if node:
-                    internal_start_nodes.append(node)
-        print("--- Internal start nodes for subnet:", [n.name for n in internal_start_nodes])
         
-        # 4. Execute Internal Graph
-        # Use simple serial execution for the start nodes for now
-
-        for node in internal_start_nodes:
-            print("")
-            print(">>>.        Cooking internal subnet node:", node.name, " in subnet:", self.name)
-            await self.cook_flow_control_nodes(node)
-            print("")
-
-        """
-        print("=== POST-Computing NodeNetwork Subnet:", self.name, " with id:", self.id)
-        # 5. Tunnel Outputs: Populates Subnet Outputs from Internal Nodes
-        
-        """
-        for port_name, port in self.outputs.items():
-            if port.isDataPort():
-                # Look for edges coming INTO the subnet output from INSIDE
-                # Connection direction: InternalNode.Out -> Subnet.Out (as Input to Subnet Node from inside)
-                edges = self.get_incoming_edges(self.id, port_name)
-                for edge in edges:
-                    source_node = self.get_node_by_id(edge.from_node_id)
-                    if source_node:
-                         val = None
-                         if edge.from_port_name in source_node.outputs:
-                             val = source_node.outputs[edge.from_port_name].value
-                         elif edge.from_port_name in source_node.inputs:
-                             val = source_node.inputs[edge.from_port_name].value
-                         
-                         if val is not None:
-                             port.value = val
-        """
         # 6. Return Result
         control_outputs = {}
         if "finished" in self.outputs:
