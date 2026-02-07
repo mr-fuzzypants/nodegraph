@@ -52,7 +52,7 @@ class Node(INode):
     def __init__(self, 
                  name: str, 
                  type: str, 
-                 network: 'NodeNetwork',
+                 network_id: str,
                  inputs: Optional[Dict[str, NodePort]] = None, 
                  outputs: Optional[Dict[str, NodePort]] = None):
         
@@ -70,10 +70,7 @@ class Node(INode):
         self.is_flow_control_node = False
         self.is_loop_node = False 
         self._isDirty = True  
-        #self.owner = owner  # Parent ID or Reference? Keeping Ref for now to pass tests.
-        self.network = network # Reference to the container network
-        self.network_id = network.id if network else None   
-
+        self.network_id = network_id
         self.path= " path node computed at runtime " # This is a bit of a hack, but it allows us to have a path property that is computed at runtime based on the network structure. In Rust/TS, we can compute this on demand or cache it as needed.
 
    

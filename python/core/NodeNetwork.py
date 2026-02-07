@@ -188,23 +188,12 @@ class NodeNetwork(Node):
         return new_node
 
 
-    #all_nodes = {}  # type: Dict[str, 'NodeNetwork']
-    #all_nodes_by_id = {}  # type: Dict[str, 'NodeNetwork']
-
-    #nodes: Dict[str, Node] = {}  # Dictionary of nodes in the net
-    #edges: List[Edge] = [] # Centralized connection storage (Arena Pattern)
-
-    #incoming_edges = defaultdict(list)  # type: Dict[Tuple[str, str], List[Edge]]
-    #outgoing_edges = defaultdict(list)  # type: Dict[Tuple[str, str], List[Edge]]
-    
-    
-
-    def __init__(self, id: str, type, network):
-        super().__init__(id, type=type, network=network)
+    def __init__(self, id: str, type, network_id):
+        super().__init__(id, type=type, network_id=network_id)
         #self.nodes: Dict[str, Node] = {}  # Dictionary of nodes in the net
         #self.edges: List[Edge] = [] # Centralized connection storage (Arena Pattern)
 
-        self.network = network  # Placeholder
+        self.network_id = network_id  # Placeholder
 
         self.is_flow_control_node = True
         self.is_async_network = False
@@ -219,17 +208,16 @@ class NodeNetwork(Node):
         #self.outgoing_edges = defaultdict(list)  # type: Dict[Tuple[str, str], List[Edge]]
     
         #NodeNetwork.graph.add_node(self)
-        self.path = f"{self.network.path}/{self.name}" if self.network else self.name
-    
+        self.path = "UNSet"
     
     def isNetwork(self) -> bool:
         return True
 
     def isRootNetwork(self) -> bool:
-        return self.network is None
+        return self.network_id is None
 
     def isSubnetwork(self) -> bool:
-        return self.network is not None
+        return self.network_id is not None
 
     # find a node in all networks by id
     def find_node_by_id(self, uid: str) -> Optional[Node]:
@@ -595,7 +583,7 @@ class NodeNetwork(Node):
             raise ValueError(f"Node with id '{id}' already exists in the network")
        
 
-        network = NodeNetwork.create_network(name, type, self)
+        network = NodeNetwork.create_network(name, type, self.id)
       
         print(".  ####Added Network node to parent network:", self.name, " with id:", network.id)
     
@@ -619,7 +607,7 @@ class NodeNetwork(Node):
 
         # Delegate to Node Factory
         try:
-            node = Node.create_node(name, type, network=self, *args, **kwargs)
+            node = Node.create_node(name, type, network_id=self.id, *args, **kwargs)
         except ValueError as e:
             # Re-raise with context if needed, or let it bubble
             raise ValueError(f"Error creating node '{type}': {e}")
@@ -1172,8 +1160,8 @@ class NodeNetwork(Node):
     
 @NodeNetwork.register("NodeNetworkSystem")
 class NodeNetworkSystem(NodeNetwork):
-    def __init__(self, id, type="NodeNetworkSystem", network=None, **kwargs):
-        super().__init__(id, type=type, network=network)
+    def __init__(self, id, type="NodeNetworkSystem", network_id=None, **kwargs):
+        super().__init__(id, type=type, network_id=network_id)
         #self.type = "NodeNetworkRoot"
         self.is_flow_control_node = True
         self.cooking_internally = False
