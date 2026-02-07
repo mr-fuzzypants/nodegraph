@@ -229,19 +229,23 @@ class NodeNetwork(Node):
 
     # find a node in all networks by id
     def find_node_by_id(self, uid: str) -> Optional[Node]:
+        assert(False), "NodeNetwork.find_node_by_id should not be called directly. Use graph.find_node_by_id instead to ensure global node registry access."
         return self.graph.find_node_by_id(uid)
     
     
     # TODO: this should be get_node_by_id for clarity
     def get_node_by_id(self, node_id: str) -> Optional[Node]:
+        assert(False), "NodeNetwork.get_node_by_id should not be called directly. Use graph.get_node_by_id instead to ensure global node registry access."
         return self.graph.get_node_by_id(node_id)
 
     # This method looks at nodes LOCAL to this network only
     def get_node_by_name(self, name: str) -> Optional[Node]:
+        assert(False), "NodeNetwork.get_node_by_name should not be called directly. Use graph.get_node_by_name instead to ensure global node registry access."
         return self.graph.get_node_by_name(name)
         
     
     def get_node_by_path(self, path: str) -> Optional[Node]:
+        assert(False), "NodeNetwork.get_node_by_path should not be called directly. Use graph.get_node_by_path instead to ensure global node registry access."
         return self.graph.get_node_by_path(path)
        
     
@@ -249,6 +253,7 @@ class NodeNetwork(Node):
     # --- Edge Management ---
     
     def add_edge(self, from_node_id: str, from_port_name: str, to_node_id: str, to_port_name: str) -> Edge:
+        assert(False), "NodeNetwork.add_edge should not be called directly. Use graph.add_edge instead to ensure global edge management."
         edge = self.graph.add_edge(from_node_id, from_port_name, to_node_id, to_port_name)
         return edge
         # Validation could happen here or in upper layers
@@ -260,12 +265,14 @@ class NodeNetwork(Node):
         return edge
 
     def get_incoming_edges(self, node_id: str, port_name: str) -> List[Edge]:
+        assert(False), "NodeNetwork.get_incoming_edges should not be called directly. Use graph.get_incoming_edges instead to ensure global edge management."
         return self.graph.get_incoming_edges(node_id, port_name)
         # Linear search for now (O(E)). In Rust/Optimized Python, use an Adjacency List (Dict[to, List[Edge]])
         return self.incoming_edges.get((node_id, port_name), [])
         #return [e for e in self.edges if e.to_node_id == node_id and e.to_port_name == port_name]
 
     def get_outgoing_edges(self, node_id: str, port_name: str) -> List[Edge]:
+        assert(False), "NodeNetwork.get_outgoing_edges should not be called directly. Use graph.get_outgoing_edges instead to ensure global edge management."
         return self.graph.get_outgoing_edges(node_id, port_name)
         return self.outgoing_edges.get((node_id, port_name), [])
         #return [e for e in self.edges if e.from_node_id == node_id and e.from_port_name == port_name]
@@ -349,7 +356,7 @@ class NodeNetwork(Node):
         
         
 
-        existing_connections = self.get_incoming_edges(other_node.id, to_port_name)
+        existing_connections = self.graph.get_incoming_edges(other_node.id, to_port_name)
         print("  ->Existing Connections on", other_node.name, to_port_name, ":", len(existing_connections))
         if existing_connections:
             if to_port.isInputOutputPort() or from_port.isInputOutputPort():
@@ -361,9 +368,9 @@ class NodeNetwork(Node):
         
         
         #return from_port.connectTo(to_port)
-        edge = self.add_edge(source_node.id, from_port_name, other_node.id, to_port_name)
+        edge = self.graph.add_edge(source_node.id, from_port_name, other_node.id, to_port_name)
 
-        existing_connections = self.get_incoming_edges(other_node.id, to_port_name)
+        existing_connections = self.graph.get_incoming_edges(other_node.id, to_port_name)
 
         return edge
 
@@ -423,7 +430,7 @@ class NodeNetwork(Node):
 
         # Check existing connections (Tunneling supports 1:1 typically, or 1:N?)
         # For now, simplistic check
-        existing = self.get_outgoing_edges(self.id, from_port_name) 
+        existing = self.graph.get_outgoing_edges(self.id, from_port_name) 
         # Wait, Tunneling is inside? 
         # If 'self' is the node, outgoing edges are stored in 'self.edges' 
         # where from_node_id == self.id.
@@ -439,7 +446,7 @@ class NodeNetwork(Node):
         # Create Edge directly to avoid "Not attached to network" error
         # since 'self' (the network) is the node, and it manages its own edges.
         # FIX: Always use port_name for consistency in Edge lookup
-        self.add_edge(self.id, from_port.port_name, other_node.id, to_port.port_name)
+        self.graph.add_edge(self.id, from_port.port_name, other_node.id, to_port.port_name)
 
         # Trigger update?
         # from_port.connectTo(to_port) # Skipped
@@ -466,9 +473,9 @@ class NodeNetwork(Node):
              # Input ports on a Network act as Sources for internal nodes.
              # The connections are stored in the Network's edge list as:
              # From: self.id, Port: 'exec' -> To: InternalNode, Port: Input
-             edges = self.get_outgoing_edges(self.id, 'exec')
+             edges = self.graph.get_outgoing_edges(self.id, 'exec')
              for edge in edges:
-                 start_node = self.get_node_by_id(edge.to_node_id)
+                 start_node = self.graph.get_node_by_id(edge.to_node_id)
                  if start_node:
                      builder.compile_chain(start_node)
         else:
@@ -589,7 +596,7 @@ class NodeNetwork(Node):
 
         print("Creating sub-network:", name, "in network:", self.name, " of path:", node_path)
 
-        if self.get_node_by_path(node_path):
+        if self.graph.get_node_by_path(node_path):
             raise ValueError(f"Node with id '{name}' already exists in the network")
        
 
@@ -606,7 +613,7 @@ class NodeNetwork(Node):
         network_path = self.graph.get_path(self.id)  # Get the path of the current network node
         node_path = f"{network_path}:{name}"
 
-        if self.get_node_by_path(node_path):
+        if self.graph.get_node_by_path(node_path):
             raise ValueError(f"Node with id '{name}' already exists in the network")
         
         print("Creating node:", name, "of type:", type, "in network:", self.name, " of path:", node_path)
@@ -629,8 +636,8 @@ class NodeNetwork(Node):
     
 
     def connectNodesByPath(self, from_node_path: str, from_port_name: str, to_node_path: str, to_port_name: str) -> Edge:
-        from_node = self.get_node_by_path(from_node_path)
-        to_node = self.get_node_by_path(to_node_path)
+        from_node = self.graph.get_node_by_path(from_node_path)
+        to_node = self.graph.get_node_by_path(to_node_path)
 
         if not from_node:
             raise ValueError(f"Source node with id '{from_node_path}' does not exist in the network")
@@ -655,8 +662,8 @@ class NodeNetwork(Node):
         to_node_path = f"{network_path}:{to_node_name}"
         
 
-        from_node = self.get_node_by_path(from_node_path)
-        to_node = self.get_node_by_path(to_node_path)
+        from_node = self.graph.get_node_by_path(from_node_path)
+        to_node = self.graph.get_node_by_path(to_node_path)
 
         # TODO: we need to search with global scope if not found locally
         if from_node_name == self.name:
@@ -713,7 +720,7 @@ class NodeNetwork(Node):
         network_path = self.graph.get_path(self.id)
         node_path = f"{network_path}:{name}"
         
-        node = self.get_node_by_path(node_path)
+        node = self.graph.get_node_by_path(node_path)
 
         if not node:
             raise ValueError(f"Node with id '{name}' does not exist in the network")
@@ -751,10 +758,10 @@ class NodeNetwork(Node):
         #assert(False), "get_downstream_ports is deprecated, use port.get_downstream_ports instead"
         #assert(False), "get_downstream_ports is deprecated, use port.get_downstream_ports instead"
         downstream_ports = []
-        outgoing_edges = self.get_outgoing_edges(src_port.node_id, src_port.port_name)
+        outgoing_edges = self.graph.get_outgoing_edges(src_port.node_id, src_port.port_name)
 
         for edge in outgoing_edges:
-            dest_node = self.get_node_by_id(edge.to_node_id)
+            dest_node = self.graph.get_node_by_id(edge.to_node_id)
             # see if I'm connected to an input port or an output port
             # first see if it's an input port and if not look for output port.
             # this is because I/O ports can be in either inputs or outputs.
@@ -780,10 +787,10 @@ class NodeNetwork(Node):
         
         #assert(False), "get_upstream_ports is deprecated, use port.get_upstream_ports instead"
         upstream_ports = []
-        incoming_edges = self.get_incoming_edges(port.node_id, port.port_name)
+        incoming_edges = self.graph.get_incoming_edges(port.node_id, port.port_name)
 
         for edge in incoming_edges:
-            src_node = self.get_node_by_id(edge.from_node_id)
+            src_node = self.graph.get_node_by_id(edge.from_node_id)
             src_port = src_node.outputs.get(edge.from_port_name)
             if not src_port:
                 src_port = src_node.inputs.get(edge.from_port_name)
@@ -938,9 +945,9 @@ class NodeNetwork(Node):
         # 2. Tunnel Inputs: Propagate Input Data from Subnet Ports to Internal Nodes
         for port_name, port in network_node.inputs.items():
             if port.isDataPort() and port.value is not None:
-                edges = self.get_outgoing_edges(network_node.id, port_name)
+                edges = self.graph.get_outgoing_edges(network_node.id, port_name)
                 for edge in edges:
-                    target_node = self.get_node_by_id(edge.to_node_id)
+                    target_node = self.graph.get_node_by_id(edge.to_node_id)
                     if target_node:
                         # Push to internal node ports
                         if edge.to_port_name in target_node.inputs:
@@ -956,9 +963,9 @@ class NodeNetwork(Node):
             #if port.isDataPort(): 
             # Look for edges coming INTO the subnet output from INSIDE
             # Connection direction: InternalNode.Out -> Subnet.Out (as Input to Subnet Node from inside)
-            edges = self.get_incoming_edges(network_node.id, port_name)
+            edges = self.graph.get_incoming_edges(network_node.id, port_name)
             for edge in edges:
-                source_node = self.get_node_by_id(edge.from_node_id)
+                source_node = self.graph.get_node_by_id(edge.from_node_id)
                 if source_node:
                         val = None
                         if edge.from_port_name in source_node.outputs:
@@ -973,9 +980,9 @@ class NodeNetwork(Node):
         for port_name, port in node.outputs.items():
             if port.isDataPort() and port.value is not None:
                 val = port.value
-                outgoing_edges = self.get_outgoing_edges(node.id, port_name)
+                outgoing_edges = self.graph.get_outgoing_edges(node.id, port_name)
                 for edge in outgoing_edges:
-                    target_node = self.get_node_by_id(edge.to_node_id)
+                    target_node = self.graph.get_node_by_id(edge.to_node_id)
                     if target_node:
                         if edge.to_port_name in target_node.inputs:
                             target_node.inputs[edge.to_port_name].value = val
@@ -1042,13 +1049,13 @@ class NodeNetwork(Node):
                 # B. Handle Standard Flow (Immediate)
                 connected_ids = []
                 for control_name, control_value in result.control_outputs.items():
-                    edges = self.get_outgoing_edges(cur_node.id, control_name)
+                    edges = self.graph.get_outgoing_edges(cur_node.id, control_name)
                     next_ids = [e.to_node_id for e in edges if e.to_node_id != self.id]
                     connected_ids.extend(next_ids)
 
                 # C. Dependency Resolution for Next Nodes
                 for next_node_id in connected_ids:
-                    next_node = self.get_node_by_id(next_node_id)
+                    next_node = self.graph.get_node_by_id(next_node_id)
                     if next_node:
                         self.build_flow_node_execution_stack(next_node, execution_stack, pending_stack)
                     #else:
@@ -1070,7 +1077,7 @@ class NodeNetwork(Node):
                     del pending_stack[node_id]
 
         for node_id in pending_stack.keys():
-            node = self.get_node_by_id(node_id)
+            node = self.graph.get_node_by_id(node_id)
             node_name = node.name if node else "Unknown"
             print(f"Node '{node_name}' ({node_id}) still has dependencies: {pending_stack[node_id]}")
         
@@ -1080,7 +1087,7 @@ class NodeNetwork(Node):
 
     async def _execute_single_node(self, cur_node_id) -> Tuple[Optional[Node], Optional[ExecutionResult]]:
         """Helper to execute a single node safely within a gathered batch"""
-        cur_node = self.find_node_by_id(cur_node_id)
+        cur_node = self.graph.get_node_by_id(cur_node_id)
         
         if not cur_node: return (None, None)
 
@@ -1143,7 +1150,7 @@ class NodeNetwork(Node):
             print("Execution Stack:", execution_stack)
             cur_node_id = execution_stack.pop(0)
             #ur_node = node.network.get_node(cur_node_id)
-            cur_node = self.get_node_by_id(cur_node_id)
+            cur_node = self.graph.get_node_by_id(cur_node_id)
             if cur_node and cur_node.isDataNode():
                 print(".   Cooking node:", cur_node.name, cur_node_id)
                 context = ExecutionContext(cur_node).to_dict()
