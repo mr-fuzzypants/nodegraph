@@ -12,13 +12,16 @@ import random
 # To avoid circular imports
 if TYPE_CHECKING:
     from NodePort import NodePort
+  
+from .Interface import ExecutionContextInterface, ExecutionResultInterface, INode, INodePort, IInputControlPort, IOutputControlPort, IInputDataPort, IOutputDataPort
 
-
-from .NodePort import NodePort, InputDataPort, OutputDataPort, InputControlPort, OutputControlPort, ValueType, PortFunction
+from .Types import ValueType, PortFunction
+from .NodePort import NodePort, InputDataPort, OutputDataPort, InputControlPort, OutputControlPort
 from .GraphPrimitives import GraphNode
-
 # Get a logger for this module
 logger = logging.getLogger(__name__)
+
+
 
 # --- RUNTIME COMMAND STRUCTS (Port-Friendly) ---
 # This architecture allows the execution engine to be decoupled from the graph structure.
@@ -31,11 +34,9 @@ class ExecCommand(Enum):
     LOOP_AGAIN = auto() # Scheduler: Re-schedule this node immediately (for iterative loops)
     COMPLETED = auto()  # Scheduler: Stop this branch of execution
 
-class ExecutionResult:
-    """
-    Standardized return type for all Node execution. 
-    Decouples the logic (Node) from the flow control (Runner).
-    """
+
+class ExecutionResult(ExecutionResultInterface):
+    
     def __init__(self, command: ExecCommand,  control_outputs: Optional[Dict[str, Any]] = None):
         self.command = command
         #self.next_nodes = [] #next_nodes if next_nodes is not None else []
@@ -68,12 +69,10 @@ class ExecutionResult:
         node.markClean()
 
 
-class ExecutionContext:
-    """
-    Context object passed to nodes during execution.
-    Can hold references to the network, global state, etc.
-    """
-    def __init__(self, node: 'Node'):
+
+class ExecutionContext(ExecutionContextInterface):
+  
+    def __init__(self, node: 'NodeBase'):
         self.node = node
         self.network = node.network if node else None
         self.network_id = self.network.id if self.network else None
@@ -151,7 +150,7 @@ class ExecutionContext:
 
 
 # A typescript map behaves like an ordered dict in python
-class Node(ABC):
+class Node(INode):
     _node_registry: Dict[str, Type['Node']] = {}
 
     @classmethod
@@ -215,17 +214,7 @@ class Node(ABC):
         return self.is_flow_control_node == True
     
     def markDirty(self):
-        #if self._isDirty:
-        #    return
         self._isDirty = True
-        return
-        # TODO: I don't think we need to propagate dirty state to input ports 
-        # Propagate dirty state to all output ports so downstream nodes are invalidated
-        for port in self.outputs.values():
-            # TODO: QUESTION. DO I NEED TO CALL MARKDIRTY ON PORT?
-            # THIS WILL TELL DOWNSTREAM NODES THAT THE PORT IS 
-            port.markDirty()
-            #port._isDirty = True
         
     def markClean(self):
         self._isDirty = False
@@ -398,9 +387,6 @@ class Node(ABC):
             print(f".       Output Port [{output_port.port_name}] dirty: {output_port.isDirty()}; value: {output_port.value}")
     
 
-    def build_execution_context(self, node) -> ExecutionContext:
-        context = ExecutionContext(network=self.network)
-        return context
     
     @abstractmethod
     async def compute(self, executionContext) -> ExecutionResult:

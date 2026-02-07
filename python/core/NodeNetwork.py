@@ -26,6 +26,9 @@ from enum import Enum, auto
 # In Python, recursion is fine. In Typescript (Async) and Rust (Ownership),
 # we cannot simply call `node.compute()` recursively.
 # Instead, `compute()` returns a Command, and a central "Runner" decides what to do next.
+
+# TODO: move these to a separate file if they are used across multiple modules (e.g. NodePort, NodeNetwork)
+# TODO we may want to have more specific commands for different scenarios (e.g. WAIT_FOR_DATA, WAIT_FOR_CONTROL, etc.) but for now we'll keep it simple.
 class ExecCommand(Enum):
     CONTINUE = auto()   # Scheduler: Add 'next_nodes' to the execution queue
     WAIT = auto()       # Scheduler: Pause execution (e.g. await Promise)
@@ -247,7 +250,7 @@ class NodeNetwork(Node):
         
     # --- Edge Management ---
     
-    def add_edge(self, from_node_id: str, from_port_name: str, to_node_id: str, to_port_name: str):
+    def add_edge(self, from_node_id: str, from_port_name: str, to_node_id: str, to_port_name: str) -> Edge:
         edge = self.graph.add_edge(from_node_id, from_port_name, to_node_id, to_port_name)
         return edge
         # Validation could happen here or in upper layers
@@ -959,6 +962,18 @@ class NodeNetwork(Node):
                         if val is not None:
                             port.value = val
 
+    def push_data_from_node(self, node: Node) -> None:
+        for port_name, port in node.outputs.items():
+            if port.isDataPort() and port.value is not None:
+                val = port.value
+                outgoing_edges = self.get_outgoing_edges(node.id, port_name)
+                for edge in outgoing_edges:
+                    target_node = self.get_node_by_id(edge.to_node_id)
+                    if target_node:
+                        if edge.to_port_name in target_node.inputs:
+                            target_node.inputs[edge.to_port_name].value = val
+                        elif edge.to_port_name in target_node.outputs:
+                            target_node.outputs[edge.to_port_name].value = val
 
     async def cook_flow_control_nodes(self, node: Node, execution_stack: List[str]=None, pending_stack: Dict[str, List[str]]=None )-> None:
 
@@ -1012,19 +1027,8 @@ class NodeNetwork(Node):
                 # node's output ports.
                 result.deserialize_result(cur_node)
 
-                 # --- NEW PUSH DATA LOGIC (ROBUST) ---
-                for port_name, port in cur_node.outputs.items():
-                    if port.isDataPort() and port.value is not None:
-                        val = port.value
-                        outgoing_edges = self.get_outgoing_edges(cur_node.id, port_name)
-                        for edge in outgoing_edges:
-                            target_node = self.get_node_by_id(edge.to_node_id)
-                            if target_node:
-                                if edge.to_port_name in target_node.inputs:
-                                    target_node.inputs[edge.to_port_name].value = val
-                                elif edge.to_port_name in target_node.outputs:
-                                    target_node.outputs[edge.to_port_name].value = val
-                # ---------------------------
+                self.push_data_from_node(cur_node)
+               
                
                 if cur_node.isNetwork():
                     # for subnetworks, we need to propogate the internal outputs back to the network outputs
@@ -1048,6 +1052,7 @@ class NodeNetwork(Node):
                     else:
                         AssertionError(f"Next node '{next_node_id}' not found in network during flow control cooking")
 
+            # schedule next nodes that have no dependencies
             for node_id in list(pending_stack.keys()):
                 deps = pending_stack[node_id]
                 if cur_node_id in deps:
