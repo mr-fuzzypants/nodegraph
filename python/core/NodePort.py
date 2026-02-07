@@ -7,6 +7,7 @@ import sys
 import logging
 
 from .Types import PortDirection, PortFunction, ValueType
+from .Interface import INodePort
 
 # Get a logger for this module
 logger = logging.getLogger(__name__)
@@ -32,7 +33,7 @@ DataType = ValueType
 
 
         
-class NodePort:
+class NodePort(INodePort):
     def __init__(self, 
                  node_id: str,  # Typed as Any to avoid circular ref check at runtime in Python 
                  port_name: str, 

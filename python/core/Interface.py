@@ -184,7 +184,7 @@ class INode(ABC):
     
     
     @abstractmethod
-    async def compute(self, executionContext) -> ExecutionResult:
+    async def compute(self, executionContext) -> ExecutionResultInterface:
         pass
 
     @abstractmethod
