@@ -11,7 +11,9 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../.
 from nodegraph.python.core.NodePort import (
     NodePort, 
     DataPort, 
-    ControlPort, 
+    ControlPort
+)
+from nodegraph.python.core.Types import (
     ValueType, 
     PortDirection, 
     PortFunction

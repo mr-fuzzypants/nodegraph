@@ -9,7 +9,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../.
 
 from nodegraph.python.core.Node import Node, ExecutionResult, ExecCommand
 from nodegraph.python.core.NodeNetwork import NodeNetwork
-from nodegraph.python.core.NodePort import InputDataPort, OutputDataPort, ValueType
+from nodegraph.python.core.NodePort import InputDataPort, OutputDataPort
+from nodegraph.python.core.Types import ValueType
 
 # Global execution log to verify order
 EXECUTION_LOG = []

@@ -4,7 +4,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../.
 
 import pytest
 from nodegraph.python.core.Node import Node
-from nodegraph.python.core.NodePort import DataPort, ControlPort, ValueType # Updated imports
+from nodegraph.python.core.NodePort import DataPort, ControlPort
+from nodegraph.python.core.Types import ValueType
 
 
 from nodegraph.python.core.Node import Node, ExecCommand, ExecutionResult
@@ -103,26 +104,32 @@ class TestNode:
         with pytest.raises(ValueError, match="already exists"):
             node.add_data_output("dup_port_out")
 
-    @pytest.mark.asyncio
-    async def test_typed_ports(self, node):
+    def test_typed_ports(self, node):
         """Test functionality of typed ports."""
-        # Add typed ports
-        int_port = node.add_data_input("int_input", data_type=ValueType.INT)
-        float_port = node.add_data_output("float_output", data_type=ValueType.FLOAT)
+        import asyncio
         
-        assert int_port.data_type == ValueType.INT
-        assert float_port.data_type == ValueType.FLOAT
-        
-        # Test validation via port directly
-        # Valid assignment
-        int_port.setValue(42)
-        assert await int_port.getValue() == 42
-        
-        # Invalid assignment (should print warning based on current implementation, 
-        # or we check if we change it to raise exception in future)
-        # For now, just checking we can set it, as the current impl only prints warnings
-        int_port.setValue("not an int") 
-        assert await int_port.getValue() == "not an int"
+        async def run():
+            # Add typed ports
+            int_port = node.add_data_input("int_input_t", data_type=ValueType.INT)
+            float_port = node.add_data_output("float_output_t", data_type=ValueType.FLOAT)
+            
+            assert int_port.data_type == ValueType.INT
+            assert float_port.data_type == ValueType.FLOAT
+            
+            # Test validation via port directly
+            # Valid assignment
+            int_port.setValue(42)
+            val = await int_port.getValue() 
+            assert val == 42
+            
+            # Invalid assignment (should print warning based on current implementation, 
+            # or we check if we change it to raise exception in future)
+            # For now, just checking we can set it, as the current impl only prints warnings
+            int_port.setValue("not an int") 
+            val2 = await int_port.getValue()
+            assert val2 == "not an int"
+
+        asyncio.run(run())
 
     def test_helper_get_ports(self, node):
         """Test helper methods for retrieving specific types of ports."""
