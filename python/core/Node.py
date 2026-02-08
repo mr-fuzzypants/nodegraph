@@ -15,7 +15,7 @@ if TYPE_CHECKING:
   
 from .Interface import IExecutionContext, IExecutionResult, INode, INodePort, IInputControlPort, IOutputControlPort, IInputDataPort, IOutputDataPort
 
-from .Types import ValueType, PortFunction
+from .Types import ValueType, PortFunction, NodeKind
 from .NodePort import NodePort, InputDataPort, OutputDataPort, InputControlPort, OutputControlPort
 from .GraphPrimitives import GraphNode
 # Get a logger for this module
@@ -74,10 +74,12 @@ class Node(INode):
         self.graph = None # Will be set by the NodeNetwork when added
         self.path= " path node computed at runtime " # This is a bit of a hack, but it allows us to have a path property that is computed at runtime based on the network structure. In Rust/TS, we can compute this on demand or cache it as needed.
 
+        self.kind = NodeKind.FUNCTION
+
    
 
     def isNetwork(self) -> bool:
-        return False
+        return self.kind == NodeKind.NETWORK
 
     def isDataNode(self) -> bool:
         return self.is_flow_control_node == False

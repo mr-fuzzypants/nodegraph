@@ -12,6 +12,7 @@ from .NodePort import (
     PortDirection, 
     PortFunction
 )
+from .Types import NodeKind
 
 from .Interface import INodePort, INodeNetwork, IExecutionResult, IExecutionContext
 if TYPE_CHECKING:
@@ -197,6 +198,7 @@ class NodeNetwork(Node):
         #self.nodes: Dict[str, Node] = {}  # Dictionary of nodes in the net
         #self.edges: List[Edge] = [] # Centralized connection storage (Arena Pattern)
         
+        self.kind = NodeKind.NETWORK
         self.graph = graph
 
         self.network_id = network_id  # Placeholder
@@ -218,8 +220,7 @@ class NodeNetwork(Node):
 
         
     
-    def isNetwork(self) -> bool:
-        return True
+
 
     def isRootNetwork(self) -> bool:
         return self.network_id is None
@@ -693,6 +694,8 @@ class NodeNetwork(Node):
     def get_downstream_ports(self, src_port: NodePort, include_io_ports: bool=False) -> List[NodePort]:
         #assert(False), "get_downstream_ports is deprecated, use port.get_downstream_ports instead"
         #assert(False), "get_downstream_ports is deprecated, use port.get_downstream_ports instead"
+        
+        return self.graph.get_downstream_ports(src_port, include_io_ports=include_io_ports)
         downstream_ports = []
         outgoing_edges = self.graph.get_outgoing_edges(src_port.node_id, src_port.port_name)
 
@@ -720,7 +723,7 @@ class NodeNetwork(Node):
 
     # NOTE: used by get_input_port_value to look upstream for the source of truth for a port's value. This is necessary because of tunneling through I/O ports, where the value may actually be coming from further upstream than the immediate connection.
     def get_upstream_ports(self, port: NodePort, include_io_ports: bool=False) -> List[NodePort]:
-        
+        return self.graph.get_upstream_ports(port, include_io_ports=include_io_ports)
         #assert(False), "get_upstream_ports is deprecated, use port.get_upstream_ports instead"
         upstream_ports = []
         incoming_edges = self.graph.get_incoming_edges(port.node_id, port.port_name)
@@ -747,14 +750,14 @@ class NodeNetwork(Node):
     # For an input port, get its value by looking upstream. Once the value is found,
     # propagate that value to all upstream ports from the source to mark them clean.
     def get_input_port_value(self, port: NodePort) -> Any:
-        
+
         
         if port._isDirty:
             if port.isInputPort() or port.isInputOutputPort():
                 #port_node = self.get_node_by_id(port.node_id)
 
                 #upstream_ports = port.node.network.get_upstream_ports(port, include_io_ports=True)
-                upstream_ports = self.get_upstream_ports(port, include_io_ports=True)
+                upstream_ports = self.graph.get_upstream_ports(port, include_io_ports=True)
                 
                 if upstream_ports:
                     source_value_port = upstream_ports.pop()

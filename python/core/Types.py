@@ -56,3 +56,7 @@ class ValueType(Enum):
             return isinstance(value, (bytes, bytearray))
             
         return False
+
+class NodeKind(Enum):
+    FUNCTION = auto()
+    NETWORK = auto()

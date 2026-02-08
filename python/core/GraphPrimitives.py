@@ -162,6 +162,63 @@ class Graph:
         self.incoming_edges.clear()
         self.outgoing_edges.clear()
 
+
+
+    def get_downstream_ports(self, src_port: INodePort, include_io_ports: bool=False) -> List[INodePort]:
+        #assert(False), "get_downstream_ports is deprecated, use port.get_downstream_ports instead"
+        #assert(False), "get_downstream_ports is deprecated, use port.get_downstream_ports instead"
+        downstream_ports = []
+        outgoing_edges = self.get_outgoing_edges(src_port.node_id, src_port.port_name)
+
+        for edge in outgoing_edges:
+            dest_node = self.get_node_by_id(edge.to_node_id)
+            # see if I'm connected to an input port or an output port
+            # first see if it's an input port and if not look for output port.
+            # this is because I/O ports can be in either inputs or outputs.
+            dest_port = dest_node.inputs.get(edge.to_port_name)
+            if not dest_port:
+                dest_port = dest_node.outputs.get(edge.to_port_name)
+            
+            if not dest_port:
+                continue
+        
+            # handle tunneling through I/O ports. 
+            if dest_port.isInputOutputPort():
+                if include_io_ports:
+                    downstream_ports.append(dest_port)
+                downstream_ports.extend(self.get_downstream_ports(dest_port, include_io_ports=include_io_ports))
+            else:
+                downstream_ports.append(dest_port)
+            
+        return downstream_ports
+
+    # NOTE: used by get_input_port_value to look upstream for the source of truth for a port's value. This is necessary because of tunneling through I/O ports, where the value may actually be coming from further upstream than the immediate connection.
+    def get_upstream_ports(self, port: INodePort, include_io_ports: bool=False) -> List[INodePort]:
+        
+        #assert(False), "get_upstream_ports is deprecated, use port.get_upstream_ports instead"
+        upstream_ports = []
+        incoming_edges = self.get_incoming_edges(port.node_id, port.port_name)
+
+        for edge in incoming_edges:
+            src_node = self.get_node_by_id(edge.from_node_id)
+            src_port = src_node.outputs.get(edge.from_port_name)
+            if not src_port:
+                src_port = src_node.inputs.get(edge.from_port_name)
+
+            if not src_port:
+                continue
+
+            # handle tunneling through I/O ports. 
+            if src_port.isInputOutputPort():
+                if include_io_ports:
+                    upstream_ports.append(src_port)
+                upstream_ports.extend(self.get_upstream_ports(src_port))
+            else:
+                upstream_ports.append(src_port)
+            
+        return upstream_ports
+    
+
     def get_upstream_nodes(self, port: INodePort) -> List[IGraphNode]:
         upstream_nodes = []
 

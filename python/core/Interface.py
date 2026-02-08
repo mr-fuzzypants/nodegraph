@@ -212,7 +212,7 @@ class INode(IGraphNode):
         pass
 
 
-class INodeNetwork(ABC):
+class INodeNetwork(INode):
     pass
 
 class IExecutionContext(ABC):
