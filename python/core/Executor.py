@@ -315,6 +315,8 @@ class Executor:
         self.push_data_from_node(cur_node)
             
         return (cur_node, result)
+    
+    
 
     def build_flow_node_execution_stack(self, node: Node, execution_stack: List[str], pending_stack: Dict[str, List[str]]):
         
@@ -445,3 +447,67 @@ class Executor:
             if dest_node and dest_node not in downstream_nodes:
                 downstream_nodes.append(dest_node)
         return downstream_nodes
+    
+
+    # TODO: do we really need this?
+    async def cook_data_nodes(self, node):
+        #assert(False), "cook_data_nodes is deprecated, use cook_flow_control_nodes instead"
+        execution_stack = []
+        pending_stack = {}
+        #execution_stack.append(node.id)    
+        #pending_stack[node.id] = []
+        
+
+        if node.isDataNode():
+            self.build_data_node_execution_stack(node, execution_stack, pending_stack)
+        
+
+
+        print("Pending Stack:", pending_stack)
+        print("Initial Execution Stack:", execution_stack)
+
+        # iterate through the pending stack and if the dependencies are all met, 
+        # add to execution stack
+        # This should be part of the regular cooking loop
+
+        for node_id in list(pending_stack.keys()):
+            deps = pending_stack[node_id]
+            if len(deps) == 0:
+                execution_stack.append(node_id)
+                del pending_stack[node_id]
+    
+        # now iterate through the execution stack and process nodes
+        while execution_stack:  
+            print("Execution Stack:", execution_stack)
+            cur_node_id = execution_stack.pop(0)
+            #ur_node = node.network.get_node(cur_node_id)
+            cur_node = self.graph.get_node_by_id(cur_node_id)
+            if cur_node and cur_node.isDataNode():
+                print(".   Cooking node:", cur_node.name, cur_node_id)
+                context = ExecutionContext(cur_node).to_dict()
+                print(".       Context:", context)
+                result = await cur_node.compute(context)
+                print(".       Result:", result.command, result.data_outputs)
+                
+                # now update output ports with the computed values. 
+                # the compute function should return a dict of output port names 
+                # to values.
+                result.deserialize_result(cur_node)
+            
+        
+            # TODO:
+            # BUG: a node network will currently:
+            # 1. process a node twice. Once because compute step does the
+            # execution and second because we are doing it here again.
+            # 2. not handle flow control nodes properly.
+            # We need to separate data node cooking from flow control node cooking.
+            # 3. The unit tests currently keep track of nodes cooked externally.
+            # but our node network will not add to that stack properly.
+            # after processing, update pending stack
+            for node_id in list(pending_stack.keys()):
+                deps = pending_stack[node_id]
+                if cur_node_id in deps:
+                    deps.remove(cur_node_id)
+                    if len(deps) == 0:
+                        execution_stack.append(node_id)
+                        del pending_stack[node_id]

@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 from logging import getLogger
 logger = getLogger(__name__)
 
-from .Executor import ExecCommand, ExecutionResult, ExecutionContext, Executor   
+from .Executor import ExecCommand, ExecutionResult, ExecutionContext   
 
 
 
@@ -672,103 +672,7 @@ class NodeNetwork(Node):
 
 
 
-    def build_flow_node_execution_stack(self, node: Node, execution_stack: List[str], pending_stack: Dict[str, List[str]]):
-        executor = Executor(self.graph)
-        executor.build_flow_node_execution_stack(node, execution_stack, pending_stack)
-                    
-    # do I even need this function separate from build_flow_node_execution_stack? I don't thinkg
-    # so. I can probably remove this.
-    def build_data_node_execution_stack(self, node: Node, execution_stack: List[str], pending_stack: Dict[str, List[str]]):
-        executor = Executor(self.graph)
-        executor.build_data_node_execution_stack(node, execution_stack, pending_stack)
 
-    def build_network_execution_stack(self, node: Node, execution_stack: List[str], pending_stack: Dict[str, List[str]]):
-        pass
-
-
-    def propogate_network_inputs_to_internal(self, network_node: 'NodeNetwork') -> None:
-        executor = Executor(self.graph)
-        executor.propogate_network_inputs_to_internal(network_node)
-    
-    def propogate_internal_node_outputs_to_network(self, network_node: Node) -> None:
-        executor = Executor(self.graph)
-        executor.propogate_internal_node_outputs_to_network(network_node)
-
-    def push_data_from_node(self, node: Node) -> None:
-        executor = Executor(self.graph)
-        executor.push_data_from_node(node)
-
-    async def cook_flow_control_nodes(self, node: Node, execution_stack: List[str]=None, pending_stack: Dict[str, List[str]]=None )-> None:
-        executor = Executor(self.graph)
-        await executor.cook_flow_control_nodes(node, execution_stack, pending_stack)
-
-
-
-    async def _execute_single_node(self, cur_node_id) -> Tuple[Optional[Node], Optional[ExecutionResult]]:
-        executor = Executor(self.graph)
-        return await executor._execute_single_node(cur_node_id)
-
-    async def cook_data_nodes(self, node):
-        #assert(False), "cook_data_nodes is deprecated, use cook_flow_control_nodes instead"
-        execution_stack = []
-        pending_stack = {}
-        #execution_stack.append(node.id)    
-        #pending_stack[node.id] = []
-        
-
-        if node.isDataNode():
-            self.build_data_node_execution_stack(node, execution_stack, pending_stack)
-        
-
-
-        print("Pending Stack:", pending_stack)
-        print("Initial Execution Stack:", execution_stack)
-
-        # iterate through the pending stack and if the dependencies are all met, 
-        # add to execution stack
-        # This should be part of the regular cooking loop
-
-        for node_id in list(pending_stack.keys()):
-            deps = pending_stack[node_id]
-            if len(deps) == 0:
-                execution_stack.append(node_id)
-                del pending_stack[node_id]
-    
-        # now iterate through the execution stack and process nodes
-        while execution_stack:  
-            print("Execution Stack:", execution_stack)
-            cur_node_id = execution_stack.pop(0)
-            #ur_node = node.network.get_node(cur_node_id)
-            cur_node = self.graph.get_node_by_id(cur_node_id)
-            if cur_node and cur_node.isDataNode():
-                print(".   Cooking node:", cur_node.name, cur_node_id)
-                context = ExecutionContext(cur_node).to_dict()
-                print(".       Context:", context)
-                result = await cur_node.compute(context)
-                print(".       Result:", result.command, result.data_outputs)
-                
-                # now update output ports with the computed values. 
-                # the compute function should return a dict of output port names 
-                # to values.
-                result.deserialize_result(cur_node)
-            
-        
-            # TODO:
-            # BUG: a node network will currently:
-            # 1. process a node twice. Once because compute step does the
-            # execution and second because we are doing it here again.
-            # 2. not handle flow control nodes properly.
-            # We need to separate data node cooking from flow control node cooking.
-            # 3. The unit tests currently keep track of nodes cooked externally.
-            # but our node network will not add to that stack properly.
-            # after processing, update pending stack
-            for node_id in list(pending_stack.keys()):
-                deps = pending_stack[node_id]
-                if cur_node_id in deps:
-                    deps.remove(cur_node_id)
-                    if len(deps) == 0:
-                        execution_stack.append(node_id)
-                        del pending_stack[node_id]
 
     
 @NodeNetwork.register("NodeNetworkSystem")
