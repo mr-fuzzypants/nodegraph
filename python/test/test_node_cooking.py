@@ -8,7 +8,8 @@ from typing import List
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
 
 from nodegraph.python.core.Node import Node
-from nodegraph.python.core.NodeNetwork import NodeNetwork, ExecutionResult, ExecutionContext, ExecCommand
+from nodegraph.python.core.NodeNetwork import NodeNetwork
+from nodegraph.python.core.Executor import ExecutionResult, ExecutionContext, ExecCommand, Executor
 from nodegraph.python.core.NodePort import InputDataPort, OutputDataPort
 from nodegraph.python.core.Types import ValueType
 
@@ -72,7 +73,7 @@ class TestNodeCooking:
         assert net.graph.get_incoming_edges(node_b.id, "in"), "Node B should have incoming edges"
         
         # Action
-        asyncio.run(net.cook_data_nodes(node_b))
+        asyncio.run(Executor(net.graph).cook_data_nodes(node_b))
         
         # Verify
         assert "A" in EXECUTION_LOG, "Upstream node A should have computed"
@@ -112,7 +113,7 @@ class TestNodeCooking:
         #net.add_edge("B", "out", "D", "in")
         #net.add_edge("C", "out", "D", "in")
         
-        asyncio.run(net.cook_data_nodes(node_d))
+        asyncio.run(Executor(net.graph).cook_data_nodes(node_d))
         #asyncio.run(net.cook_flow_control_nodes(node_d))
         assert len(EXECUTION_LOG) == 3
         assert EXECUTION_LOG[0] == "A"
@@ -142,7 +143,7 @@ class TestNodeCooking:
         #net.add_edge("A", "out", "C", "in")
         #net.add_edge("B", "out", "C", "in")
         
-        asyncio.run(net.cook_data_nodes(node_c))
+        asyncio.run(Executor(net.graph).cook_data_nodes(node_c))
         
         assert "A" in EXECUTION_LOG
         #assert "B" in EXECUTION_LOG
@@ -158,7 +159,7 @@ class TestNodeCooking:
         node_a = net.createNode("A", "CookingTestNode")
         node_b = net.createNode("B", "CookingTestNode")
         
-        asyncio.run(net.cook_data_nodes(node_b))
+        asyncio.run(Executor(net.graph).cook_data_nodes(node_b))
         
         assert "B" in EXECUTION_LOG
         assert "A" not in EXECUTION_LOG
@@ -179,7 +180,7 @@ class TestNodeCooking:
         #net.add_edge("A", "out", "B", "in")
         #net.add_edge("B", "out", "C", "in")
         
-        asyncio.run(net.cook_data_nodes(c))
+        asyncio.run(Executor(net.graph).cook_data_nodes(c))
         #asyncio.run(net.cook_flow_control_nodes(c))
         
         print("EXECUTION_LOG:", EXECUTION_LOG)

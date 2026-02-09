@@ -8,7 +8,8 @@ from typing import List, Dict
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
 
 from nodegraph.python.core.Node import Node
-from nodegraph.python.core.NodeNetwork import NodeNetwork, ExecutionContext, ExecutionResult, ExecCommand
+from nodegraph.python.core.NodeNetwork import NodeNetwork
+from nodegraph.python.core.Executor import ExecutionContext, ExecutionResult, ExecCommand, Executor
 from nodegraph.python.core.NodePort import InputControlPort, OutputControlPort, InputDataPort, OutputDataPort
 from nodegraph.python.core.Types import ValueType
 from nodegraph.python.core.GraphPrimitives import Edge
@@ -146,7 +147,7 @@ class TestNodeCookingFlow:
         #net.connectNodes("Middle", "next", "End", "exec")
         net.connectNodesByPath("/net_flow_linear:Middle", "next", "/net_flow_linear:End", "exec")
         
-        asyncio.run(net.cook_flow_control_nodes(n1))
+        asyncio.run(Executor(net.graph).cook_flow_control_nodes(n1))
         
         assert EXECUTION_LOG == ["Start", "Middle", "End"]
 
@@ -170,7 +171,7 @@ class TestNodeCookingFlow:
         #net.connectNodes("A", "next", "C", "exec")
         net.connectNodesByPath("/net_flow_branch:A", "next", "/net_flow_branch:C", "exec")
         
-        asyncio.run(net.cook_flow_control_nodes(n_a))
+        asyncio.run(Executor(net.graph).cook_flow_control_nodes(n_a))
         
         assert "A" in EXECUTION_LOG
         assert "B" in EXECUTION_LOG
@@ -206,7 +207,7 @@ class TestNodeCookingFlow:
         #net.connectNodes("Provider", "out", "Consumer", "data_in")
         net.connectNodesByPath("/net_mixed:Provider", "out", "/net_mixed:Consumer", "data_in")
         
-        asyncio.run(net.cook_flow_control_nodes(flow_start))
+        asyncio.run(Executor(net.graph).cook_flow_control_nodes(flow_start))
         
         assert "Start" in EXECUTION_LOG
         assert "Consumer" in EXECUTION_LOG
@@ -262,7 +263,7 @@ class TestNodeCookingFlow:
         # Hack to simulate 'calling' the subnet
         # In a real engine, the subnet node itself would be computed, which would delegate to internal graph.
         # Here we just cook the internal node to see if it pulls data through the tunnel.
-        asyncio.run(net.cook_flow_control_nodes(internal_flow))
+        asyncio.run(Executor(net.graph).cook_flow_control_nodes(internal_flow))
         
 
         print("EXECUTION LOG:", EXECUTION_LOG)
@@ -295,7 +296,7 @@ class TestNodeCookingFlow:
         root.connectNodesByPath("/root/A", "exec", "/root/A/B", "exec")
         root.connectNodesByPath("/root/A/B", "exec", "/root/A/B:Leaf", "exec")
         
-        asyncio.run(root.cook_flow_control_nodes(leaf_node))
+        asyncio.run(Executor(root.graph).cook_flow_control_nodes(leaf_node))
         
         assert "Leaf" in EXECUTION_LOG
 
@@ -355,7 +356,7 @@ class TestNodeCookingFlow:
         subnet_b.connectNodesByPath("/Root/SubnetA/SubnetB", "exec", "/Root/SubnetA/SubnetB:NodeB", "exec")
         
         # Run
-        asyncio.run(net.cook_flow_control_nodes(start))
+        asyncio.run(Executor(net.graph).cook_flow_control_nodes(start))
         
         print("NESTED EXEC LOG:", EXECUTION_LOG)
         
@@ -432,7 +433,7 @@ class TestNodeCookingFlow:
         subnet.connectNodesByPath("/Root/Subnet:InternalData", "out", "/Root/Subnet", "data_out")   
 
         # Run
-        asyncio.run(net.cook_flow_control_nodes(start))
+        asyncio.run(Executor(net.graph).cook_flow_control_nodes(start))
 
         print("SUBNET OUTPUT LOG:", EXECUTION_LOG)
 
@@ -578,7 +579,7 @@ class TestNodeCookingFlow:
     
         # --- EXECUTE ---
         print("\n--- STARTING COMPLEX TEST ---")
-        asyncio.run(net.cook_flow_control_nodes(root_start))
+        asyncio.run(Executor(net.graph).cook_flow_control_nodes(root_start))
     
         print("COMPLEX EXEC LOG:", EXECUTION_LOG)
     
@@ -695,7 +696,7 @@ class TestNodeCookingFlow:
         #consumer.connectNodes("Consumer", "exec", "C_Flow", "exec")
         consumer.connectNodesByPath("/RootHandoff/Consumer", "exec", "/RootHandoff/Consumer:C_Flow", "exec")
         
-        asyncio.run(net.cook_flow_control_nodes( start ))
+        asyncio.run(Executor(net.graph).cook_flow_control_nodes( start ))
         
         # Verification
         # 1. Execution Order

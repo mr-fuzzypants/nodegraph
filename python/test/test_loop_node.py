@@ -8,7 +8,8 @@ from typing import List, Dict
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
 
 from nodegraph.python.core.Node import Node
-from nodegraph.python.core.NodeNetwork import NodeNetwork, ExecutionResult, ExecCommand
+from nodegraph.python.core.NodeNetwork import NodeNetwork
+from nodegraph.python.core.Executor import ExecutionContext, ExecutionResult, ExecCommand, Executor
 from nodegraph.python.core.Types import ValueType
 from nodegraph.python.core.NodePort import InputControlPort, OutputControlPort, InputDataPort, OutputDataPort
 
@@ -32,9 +33,17 @@ class ForLoopNode(Node):
         self.outputs["completed"] = OutputControlPort(self, "completed")  # Fires when done
         self.outputs["index"] = OutputDataPort(self.id, "index", ValueType.INT)
 
-    async def compute(self, executionContext) -> ExecutionResult:
-        start_val = await self.inputs["start"].getValue()
-        end_val = await self.inputs["end"].getValue()
+    async def compute(self, executionContext: Dict) -> ExecutionResult:
+        start_val = executionContext["data_inputs"].get("start")
+        end_val = executionContext["data_inputs"].get("end")
+
+        print("Execution Context Data Inputs:", executionContext)
+        #assert(False)
+    
+    
+
+        #start_val = await self.inputs["start"].getValue()
+        #end_val = await self.inputs["end"].getValue()
         
         if start_val is None: start_val = 0
         if end_val is None: end_val = 0
@@ -113,7 +122,7 @@ class TestLoopNode:
             
             # Run
             print("\nStarting Loop Test")
-            await net.cook_flow_control_nodes(loop_node)
+            await Executor(net.graph).cook_flow_control_nodes(loop_node)
             print("Loop Test Finished\n")
             
             # Verify
@@ -143,7 +152,7 @@ class TestLoopNode:
             net.graph.add_edge(loop_node.id, "index", counter_b.id, "val")
             
             print("\nStarting Parallel Loop Test")
-            await net.cook_flow_control_nodes(loop_node)
+            await Executor(net.graph).cook_flow_control_nodes(loop_node)
             print("Parallel Loop Test Finished\n")
             
             assert counter_a.count == 3
@@ -184,7 +193,7 @@ class TestLoopNode:
 
             # Run
             print("\nStarting Nested Loop Test")
-            await net.cook_flow_control_nodes(outer_loop)
+            await Executor(net.graph).cook_flow_control_nodes(outer_loop)
             print("Nested Loop Test Finished\n")
             
             # Verify
