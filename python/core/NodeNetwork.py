@@ -64,8 +64,6 @@ class NodeNetwork(Node):
 
     def __init__(self, id: str, type, network_id, graph: Optional[Graph] = None):
         super().__init__(id, type=type, network_id=network_id)
-        #self.nodes: Dict[str, Node] = {}  # Dictionary of nodes in the net
-        #self.edges: List[Edge] = [] # Centralized connection storage (Arena Pattern)
         
         self.kind = NodeKind.NETWORK
         self.graph = graph
@@ -74,18 +72,8 @@ class NodeNetwork(Node):
 
         self.is_flow_control_node = True
         self.is_async_network = False
-        #self.is_data_node = False
-
-        # Implement an adjacency map for efficient lookups.
-        # Note that we're using a default dict with a composite key. We *may* want to use a 
-        # string key instead made up from the id and port name for simplicity.
-        # TODO: we have to ensure a node id is unique in a network for this to work properly.
-        # TODO: also port names have to be unique per node.
-        #self.incoming_edges = defaultdict(list)  # type: Dict[Tuple[str, str], List[Edge]]
-        #self.outgoing_edges = defaultdict(list)  # type: Dict[Tuple[str, str], List[Edge]]
-    
-        #NodeNetwork.graph.add_node(self)
-        self.path = "UNSet"
+       
+        self.path = "UNSet" # TOSO: set this properly based on parent network and name
 
         
     
@@ -96,58 +84,8 @@ class NodeNetwork(Node):
 
     def isSubnetwork(self) -> bool:
         return self.network_id is not None
+    
 
-    # find a node in all networks by id
-    def find_node_by_id(self, uid: str) -> Optional[Node]:
-        assert(False), "NodeNetwork.find_node_by_id should not be called directly. Use graph.find_node_by_id instead to ensure global node registry access."
-        return self.graph.find_node_by_id(uid)
-    
-    
-    # TODO: this should be get_node_by_id for clarity
-    def get_node_by_id(self, node_id: str) -> Optional[Node]:
-        assert(False), "NodeNetwork.get_node_by_id should not be called directly. Use graph.get_node_by_id instead to ensure global node registry access."
-        return self.graph.get_node_by_id(node_id)
-
-    # This method looks at nodes LOCAL to this network only
-    def get_node_by_name(self, name: str) -> Optional[Node]:
-        assert(False), "NodeNetwork.get_node_by_name should not be called directly. Use graph.get_node_by_name instead to ensure global node registry access."
-        return self.graph.get_node_by_name(name)
-        
-    
-    def get_node_by_path(self, path: str) -> Optional[Node]:
-        assert(False), "NodeNetwork.get_node_by_path should not be called directly. Use graph.get_node_by_path instead to ensure global node registry access."
-        return self.graph.get_node_by_path(path)
-       
-    
-        
-    # --- Edge Management ---
-    
-    def add_edge(self, from_node_id: str, from_port_name: str, to_node_id: str, to_port_name: str) -> Edge:
-        assert(False), "NodeNetwork.add_edge should not be called directly. Use graph.add_edge instead to ensure global edge management."
-        edge = self.graph.add_edge(from_node_id, from_port_name, to_node_id, to_port_name)
-        return edge
-        # Validation could happen here or in upper layers
-        #edge = Edge(from_node_id, from_port_name, to_node_id, to_port_name)
-        #self.edges.append(edge)
-
-        self.incoming_edges[(to_node_id, to_port_name)].append(edge)
-        self.outgoing_edges[(from_node_id, from_port_name)].append(edge)
-        return edge
-
-    def get_incoming_edges(self, node_id: str, port_name: str) -> List[Edge]:
-        assert(False), "NodeNetwork.get_incoming_edges should not be called directly. Use graph.get_incoming_edges instead to ensure global edge management."
-        return self.graph.get_incoming_edges(node_id, port_name)
-        # Linear search for now (O(E)). In Rust/Optimized Python, use an Adjacency List (Dict[to, List[Edge]])
-        return self.incoming_edges.get((node_id, port_name), [])
-        #return [e for e in self.edges if e.to_node_id == node_id and e.to_port_name == port_name]
-
-    def get_outgoing_edges(self, node_id: str, port_name: str) -> List[Edge]:
-        assert(False), "NodeNetwork.get_outgoing_edges should not be called directly. Use graph.get_outgoing_edges instead to ensure global edge management."
-        return self.graph.get_outgoing_edges(node_id, port_name)
-        return self.outgoing_edges.get((node_id, port_name), [])
-        #return [e for e in self.edges if e.from_node_id == node_id and e.from_port_name == port_name]
-    
-    # -----------------------
 
     """
     I want to eventually support async networks, but for now this is just a placeholder.
@@ -180,6 +118,34 @@ class NodeNetwork(Node):
 
         return port
 
+    def add_data_output_port(self, port_name: str) -> InputOutputDataPort:
+        """Add a tunnel output port to this NodeNetwork (data exits the subnet)."""
+        if port_name in self.outputs:
+            raise ValueError(
+                f"Data output port '{port_name}' already exists in node '{self.id}'"
+            )
+        port = InputOutputDataPort(self.id, port_name)
+        self.outputs[port_name] = port
+        return port
+
+    def remove_data_input_port(self, port_name: str) -> None:
+        """Remove a tunnel input port from this NodeNetwork."""
+        if port_name not in self.inputs:
+            raise ValueError(
+                f"Data input port '{port_name}' does not exist in node '{self.id}'"
+            )
+        del self.inputs[port_name]
+
+    def remove_data_output_port(self, port_name: str) -> None:
+        """Remove a tunnel output port from this NodeNetwork."""
+        if port_name not in self.outputs:
+            raise ValueError(
+                f"Data output port '{port_name}' does not exist in node '{self.id}'"
+            )
+        del self.outputs[port_name]
+    
+        
+
     # not currenty being used, but will be needed.
     def can_connect_output_to(self, source_node, from_port_name: str, other_node: 'Node', to_port_name: str) -> bool:
         #assert(False), "CAN CONNECT OUTPUT TO NOT USED ANYMORE"
@@ -197,12 +163,162 @@ class NodeNetwork(Node):
         
         return True
     
+    def isParentOf(self, source_node, other_node) -> bool:
+        if source_node.id == other_node.network_id:
+            return True
+        
+        return False
+    
+    def isChildOf(self, source_node, other_node) -> bool:
+        if source_node.network_id == other_node.id:
+            return True
+        
+        return False
+    
+    # returns whether nodes are siblings (have the same parent network) or are the same node. 
+    def isSibling(self, source_node, other_node) -> bool:
+        if source_node.network_id == other_node.network_id:
+            return True
+        
+        return False
+    
+    
 
+    def can_connect_input(self, source_node: Node, from_port_name: str, other_node: 'Node', to_port_name: str) -> bool:
+        #assert(False), "CAN CONNECT INPUT TO NOT USED ANYMORE"
+        from_port = source_node.inputs.get(from_port_name)
+        
+        if not from_port:
+            raise ValueError(f"Input port '{from_port_name}' not found in node '{self.id}'")
+        
+        
+        # Identity check using IDs for portability
+        if from_port.node_id == other_node.id:
+            return False
+        
+        # Siblings connect from output to input.
+        # Parent/Child connections (i.e. subnetworks) connect from (internal) input to input
 
-    def connect_output_to_refactored(self, source_node, from_port_name: str, other_node: 'Node', to_port_name: str):
+        if self.isSibling(source_node, other_node):
+            to_port = other_node.outputs.get(to_port_name)
+            if not to_port:
+                raise ValueError(f"Output port '{to_port_name}' not found in node '{other_node.id}'")
+            
+            return True     # we sill have to check the port types to see of they're compatible
+        # This code is a bit tricky because we have to consider the direction of the connection 
+        # in the context of parent/child relationships.
+        elif self.isParentOf(source_node, other_node):
+            to_port = other_node.inputs.get(to_port_name)
+            if not to_port:
+                raise ValueError(f"Output port '{to_port_name}' not found in node '{other_node.id}'")
+            
+            return True
+        elif self.isChildOf(source_node, other_node):
+            to_port = other_node.inputs.get(to_port_name)
+            if not to_port:
+                raise ValueError(f"Output port '{to_port_name}' not found in node '{other_node.id}'")
+            
+            return True
+        
+        return False
+    
+    def can_connnect_output(self, source_node, from_port_name: str, other_node: 'Node', to_port_name: str) -> bool:
+        #assert(False), "CAN CONNECT OUTPUT TO NOT USED ANYMORE"
+        
+        
+        
+        
+        
+        # Identity check using IDs for portability
+        if from_port.node_id == other_node.id:
+            return False
+        
+        # Siblings connect from output to input.
+        # Parent/Child connections (i.e. subnetworks) connect from (internal) input to input
+
+        if self.isSibling(source_node, other_node):
+            from_port = source_node.outputs.get(from_port_name)
+            to_port = other_node.inputs.get(to_port_name)
+
+            if not from_port:
+                raise ValueError(f"Output port '{from_port_name}' not found in node '{self.name}'")
+            if not to_port:
+                raise ValueError(f"Input port '{to_port_name}' not found in node '{other_node.id}'")
+            
+            return True     # we sill have to check the port types to see of they're compatible
+        # This code is a bit tricky because we have to consider the direction of the connection 
+        # in the context of parent/child relationships.
+        elif self.isParentOf(source_node, other_node):
+            to_port = other_node.outputs.get(to_port_name)
+            if not to_port:
+                raise ValueError(f"Output port '{to_port_name}' not found in node '{other_node.id}'")
+            
+            return True
+        elif self.isChildOf(source_node, other_node):
+            to_port = other_node.outputs.get(to_port_name)
+            if not to_port:
+                raise ValueError(f"Output port '{to_port_name}' not found in node '{other_node.id}'")
+            
+            return True
+        
+        return False
+    
+
+    def connect_input(self, source_node, from_port_name: str, other_node: 'Node', to_port_name: str) -> Edge:
+        #assert(False), "CONNECT OUTPUT TO NOT USED ANYMORE"
+
+        assert(from_port_name in source_node.inputs), f"Source node '{source_node.id}' does not have input port '{from_port_name}'"
+       
+        if self.isSibling(source_node, other_node):
+            assert(from_port_name in source_node.outputs), f"Source node '{source_node.id}' does not have output port '{from_port_name}'"
+            assert(to_port_name in other_node.inputs), f"Target node '{other_node.id}' does not have input port '{to_port_name}'"
+          
+            edge = self.graph.add_edge(source_node.id, from_port_name, other_node.id, to_port_name)
+        elif self.isParentOf(source_node, other_node):
+            assert(from_port_name in source_node.inputs), f"Source node '{source_node.id}' does not have output port '{from_port_name}'"
+            assert(to_port_name in other_node.inputs), f"Target node '{other_node.id}' does not have input port '{to_port_name}'"
+            assert(source_node.isNetwork()), f"Source node '{source_node.id}' must be a network to connect to its child node '{other_node.id}'" 
+            # here the other node is inside a network represented by source_node, 
+            # so the connection is actually network input to node/subnet input
+            edge = self.graph.add_edge(source_node.id, from_port_name, other_node.id, to_port_name)
+        elif self.isChildOf(source_node, other_node):
+            assert(from_port_name in source_node.inputs), f"Source node '{source_node.id}' does not have output port '{from_port_name}'"
+            assert(to_port_name in other_node.inputs), f"Target node '{other_node.id}' does not have output port '{to_port_name}'"
+            assert(other_node.isNetwork()), f"Target node '{other_node.id}' must be a network to connect to its parent node '{source_node.id}'" 
+            # here the source node is inside a network represented by other_node,
+            # so the connection is actually node/subnet output to network output
+            # (we reverse the direction from the perspective of the network, since the source node is inside the network and the target port is on the network itself)
+            edge = self.graph.add_edge( other_node.id, to_port_name, source_node.id, from_port_name,)
+        else:
+            raise ValueError("Nodes are not siblings or parent/child, cannot connect")
+
+    def connect_output(self, source_node, from_port_name: str, other_node: 'Node', to_port_name: str) -> Edge:
+        #assert(False), "CONNECT OUTPUT TO NOT USED ANYMORE"
+        # This is essentially the same as connect_input but with reversed direction and port types, so we can delegate to it for consistency.
+        return self.connect_input(source_node, from_port_name, other_node, to_port_name)
+
+    def connect_output_to_refactored(self, source_node:Node , from_port_name: str, other_node: 'Node', to_port_name: str):
         #assert(False)
         from_port = source_node.outputs.get(from_port_name)
         to_port = other_node.inputs.get(to_port_name)
+
+
+        #can_connect = self.can_connnect_output(source_node, from_port_name, other_node, to_port_name)
+        #if not can_connect:
+        #    raise ValueError(f"Cannot connect output '{from_port_name}' of node '{source_node.id}' to input '{to_port_name}' of node '{other_node.id}' due to incompatible port types or invalid network relationship.")
+
+        if other_node.network_id == source_node.id:
+            # here the other node is inside a network represented by source_node, 
+            # so the connection is actually network input to node/subnet input
+            from_port = source_node.inputs.get(from_port_name)
+            to_port = other_node.inputs.get(to_port_name) 
+            print("!@!!!!!!!!!CONNECTING TO SUBNET INPUT:", source_node.name, from_port_name,"->", other_node.name, to_port_name)
+            #assert(False), "Debug Stop"
+        elif source_node.network_id == other_node.network_id:
+            # in this case they are siblings
+            from_port = source_node.outputs.get(from_port_name)  
+            to_port = other_node.inputs.get(to_port_name)
+
 
         print("CONNECTING NODES:", source_node.name, from_port_name,"->", other_node.name, to_port_name)
         if not to_port:
@@ -240,7 +356,7 @@ class NodeNetwork(Node):
         #return from_port.connectTo(to_port)
         edge = self.graph.add_edge(source_node.id, from_port_name, other_node.id, to_port_name)
 
-        existing_connections = self.graph.get_incoming_edges(other_node.id, to_port_name)
+        #existing_connections = self.graph.get_incoming_edges(other_node.id, to_port_name)
 
         return edge
 
@@ -270,6 +386,11 @@ class NodeNetwork(Node):
         # assert(from_port.isOutputPort() or from_port.isInputOutputPort())
         assert(from_port.direction == PortDirection.OUTPUT or from_port.direction == PortDirection.INPUT_OUTPUT), "Source port must be an input/output port"
         
+
+        # TODO: check to make sure we're not using this code, but our current
+        # TODO: implmentation does not make use oc connections
+        """"
+        
         if to_port.incoming_connections:
             # Replaced complex port logic with Enum checks
             if to_port.direction == PortDirection.INPUT_OUTPUT or from_port.direction == PortDirection.INPUT_OUTPUT:
@@ -278,11 +399,12 @@ class NodeNetwork(Node):
                 pass
             else:
                  raise ValueError(f"Error: Port '{to_port_name}' on network '{self.id}' is already connected")
-        
+        """
 
         from_port.connectTo(to_port)
     
     def connect_network_input_to(self, from_port_name: str, other_node: Node, to_port_name: str):
+        
         from_port = self.inputs.get(from_port_name)
         to_port = other_node.inputs.get(to_port_name)
 
@@ -321,6 +443,17 @@ class NodeNetwork(Node):
         # Trigger update?
         # from_port.connectTo(to_port) # Skipped
 
+    """
+        connect("subnet.a", "subnet.b")
+        if subnet_b.parent_id == subnet_a.id:
+            # This is a connection to a parent network, so we need to create a tunnel.
+            # Tunnels are represented as special edges in the graph that connect the internal node to the
+            # this source port will be found on the input list and the dest port will be an input on node
+        if subnet_b.parent_id == subnet_a._parent_id:
+            # This is a connection within the same network, so we can connect directly.
+            source port is an output, and dest port is an input.
+
+    """
 
     def compile(self, builder: Any):
         """
@@ -460,7 +593,7 @@ class NodeNetwork(Node):
         return edge
 
     def connectNodes(self, from_node_name: str, from_port_name: str, to_node_name: str, to_port_name: str) -> Edge:
-        
+        #assert(False), "connectNodes is deprecated, use connectNodesByPath for clarity and to avoid name conflicts. This method can be re-added as a convenience wrapper if needed, but it should not be used internally to avoid ambiguity."
         print("Connecting nodes by name:", from_node_name, from_port_name, to_node_name, to_port_name)
 
         network_path = self.graph.get_path(self.id)  # Get the path of the current network node
@@ -484,31 +617,6 @@ class NodeNetwork(Node):
             raise ValueError(f"Target node with id '{to_node_name}' does not exist in the network '{self.name}'")
         
 
-        #print("  From Node:", from_node.name, from_node.network.id, self.id)
-
-        # if my node is inside a network, then we connect
-        # the output to the network output port instead.
-        #if from_node.network.id == self.id:
-        #    assert(False), "from_node found inside local network. "
-
-        #if not from_node:
-        #    raise ValueError(f"Source node with id '{from_node_name}' does not exist in the network")
-        #if not to_node:
-        #    raise ValueError(f"Target node with id '{to_node_name}' does not exist in the network '{self.name}'")
-        
-        
-
-        #if from_node.id == to_node.id:
-        #    raise ValueError("Cannot connect a node to itself")
-        
-        #from_node_id = self.get_node_by_name(from_node_name).id
-        #to_node_id = self.get_node_by_name(to_node_name).id
-        #from_node = self.get_node(from_node_id)
-        #to_node = self.get_node(to_node_id)
-
-        # New Logic: Delegate to NodePort, but we know it adds to 'self.edges'
-        # Verification happens in connectTo
-        #from_node.connect_output_to(from_port_name, to_node, to_port_name) 
         self.connect_node_output_to(from_node, from_port_name, to_node, to_port_name)
         
         # We can reconstruct the Edge object that was implicitly created
@@ -555,72 +663,12 @@ class NodeNetwork(Node):
 
 
     """"""
-    # get all the downstream ports connected to src_port. By default we don't
-    # include I/O ports in the results, and just return the "final" downstream ports.
-    #
-    # TODO: revist if we make this function iterative instead of recursive.
-    # TODO: for now though it's more readable.
-    def get_downstream_ports(self, src_port: NodePort, include_io_ports: bool=False) -> List[NodePort]:
-        #assert(False), "get_downstream_ports is deprecated, use port.get_downstream_ports instead"
-        #assert(False), "get_downstream_ports is deprecated, use port.get_downstream_ports instead"
-        
-        return self.graph.get_downstream_ports(src_port, include_io_ports=include_io_ports)
-        downstream_ports = []
-        outgoing_edges = self.graph.get_outgoing_edges(src_port.node_id, src_port.port_name)
 
-        for edge in outgoing_edges:
-            dest_node = self.graph.get_node_by_id(edge.to_node_id)
-            # see if I'm connected to an input port or an output port
-            # first see if it's an input port and if not look for output port.
-            # this is because I/O ports can be in either inputs or outputs.
-            dest_port = dest_node.inputs.get(edge.to_port_name)
-            if not dest_port:
-                dest_port = dest_node.outputs.get(edge.to_port_name)
-            
-            if not dest_port:
-                continue
-        
-            # handle tunneling through I/O ports. 
-            if dest_port.isInputOutputPort():
-                if include_io_ports:
-                    downstream_ports.append(dest_port)
-                downstream_ports.extend(self.get_downstream_ports(dest_port, include_io_ports=include_io_ports))
-            else:
-                downstream_ports.append(dest_port)
-            
-        return downstream_ports
-
-    # NOTE: used by get_input_port_value to look upstream for the source of truth for a port's value. This is necessary because of tunneling through I/O ports, where the value may actually be coming from further upstream than the immediate connection.
-    def get_upstream_ports(self, port: NodePort, include_io_ports: bool=False) -> List[NodePort]:
-        return self.graph.get_upstream_ports(port, include_io_ports=include_io_ports)
-        #assert(False), "get_upstream_ports is deprecated, use port.get_upstream_ports instead"
-        upstream_ports = []
-        incoming_edges = self.graph.get_incoming_edges(port.node_id, port.port_name)
-
-        for edge in incoming_edges:
-            src_node = self.graph.get_node_by_id(edge.from_node_id)
-            src_port = src_node.outputs.get(edge.from_port_name)
-            if not src_port:
-                src_port = src_node.inputs.get(edge.from_port_name)
-
-            if not src_port:
-                continue
-
-            # handle tunneling through I/O ports. 
-            if src_port.isInputOutputPort():
-                if include_io_ports:
-                    upstream_ports.append(src_port)
-                upstream_ports.extend(self.get_upstream_ports(src_port))
-            else:
-                upstream_ports.append(src_port)
-            
-        return upstream_ports
-    
-    # For an input port, get its value by looking upstream. Once the value is found,
+     # For an input port, get its value by looking upstream. Once the value is found,
     # propagate that value to all upstream ports from the source to mark them clean.
     def get_input_port_value(self, port: NodePort) -> Any:
 
-        
+        #assert(False), "NodeNetwork.get_input_port_value is deprecated, use port.get_value() instead to ensure proper upstream value resolution and dirty state management."
         if port._isDirty:
             if port.isInputPort() or port.isInputOutputPort():
                 #port_node = self.get_node_by_id(port.node_id)
@@ -640,39 +688,6 @@ class NodeNetwork(Node):
                     
         return port.value
     
-
-    def get_upstream_nodes(self, port: NodePort) -> List[Node]:
-        return self.graph.get_upstream_nodes(port)
-    
-        upstream_nodes = []
-        #incoming_edges = port.node.network.get_incoming_edges(port.node.id, port.port_name)
-        incoming_edges = self.get_incoming_edges(port.node_id, port.port_name)
-        
-        for edge in incoming_edges:
-            #src_node = port.node.network.get_node_by_id(edge.from_node_id)
-            src_node = self.get_node_by_id(edge.from_node_id)
-            if src_node and src_node not in upstream_nodes:
-                upstream_nodes.append(src_node)
-        
-        return upstream_nodes
-
-    def get_downstream_nodes(self, port: NodePort) -> List[Node]:
-        return self.graph.get_downstream_nodes(port)
-        downstream_nodes = []
-        #outgoing_edges = port.node.network.get_outgoing_edges(port.node.id, port.port_name)
-        outgoing_edges = self.get_outgoing_edges(port.node_id, port.port_name)
-
-        for edge in outgoing_edges:
-            #dest_node = port.node.network.get_node_by_id(edge.to_node_id)
-            dest_node = self.get_node_by_id(edge.to_node_id)
-            if dest_node and dest_node not in downstream_nodes:
-                downstream_nodes.append(dest_node)
-        
-        return downstream_nodes
-
-
-
-
 
     
 @NodeNetwork.register("NodeNetworkSystem")

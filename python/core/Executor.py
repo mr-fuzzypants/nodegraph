@@ -69,6 +69,8 @@ class ExecutionContext(IExecutionContext):
         
         return port.value   # this seems to work properly, but we need to verify that the value is being properly propagated through the network and that dirty flags are being respected.
 
+        # TODO: check for sure we don't need this.
+        """
         if not self.node.graph:
              raise ValueError(f"Node {self.node.id} has no graph context")
 
@@ -96,6 +98,7 @@ class ExecutionContext(IExecutionContext):
         assert(self.node.graph is not None), "Node must have a graph context to get port values"
         
         return source_port.value
+    """
 
     def to_dict(self) -> Dict[str, Any]:
         print(".     [1.5]Building execution context for node:", self.node.id, self.node.type)
@@ -173,6 +176,25 @@ class PendingStack:
 class Executor:
     def __init__(self, graph: Graph):
         self.graph = graph
+
+        # ── Observation hooks (optional) ──────────────────────────────────
+        # Set these before calling cook_* to receive lifecycle events.
+        #
+        # on_before_node(node_id: str, name: str) -> None | Awaitable[None]
+        #   Called just before a node's compute() is invoked.  May be async.
+        self.on_before_node = None
+
+        # on_after_node(node_id: str, name: str, duration_ms: float, error: str|None) -> None
+        #   Called after compute() returns (or raises).  Always synchronous.
+        self.on_after_node = None
+
+        # on_edge_data(from_node_id, from_port, to_node_id, to_port) -> None
+        #   Called each time a data value is pushed along an edge.
+        self.on_edge_data = None
+
+        # on_checkpoint(checkpoint: dict) -> None
+        #   Reserved for future serialised-state checkpoints.
+        self.on_checkpoint = None
 
     async def cook_flow_control_nodes(self, node: Node, execution_stack: List[str]=None, pending_stack: Dict[str, List[str]]=None )-> None:
         # New implementation with Stack (LIFO) and Deferred Execution for Loops
@@ -301,14 +323,33 @@ class Executor:
 
         print(f".   [1] Cooking node: {cur_node.name} ({cur_node_id})")
         print("     [1.1] Execution Context for node:", cur_node.name, ":", ExecutionContext(cur_node).to_dict())
+
+        # ── on_before_node hook ───────────────────────────────────────────
+        if self.on_before_node is not None:
+            ret = self.on_before_node(cur_node.id, cur_node.name)
+            if ret is not None and hasattr(ret, "__await__"):
+                await ret
+
         context = ExecutionContext(cur_node).to_dict()
-        result = await cur_node.compute(executionContext=context)
-        
-        # Apply side effects immediately? 
+        _t0 = asyncio.get_event_loop().time()
+        try:
+            result = await cur_node.compute(executionContext=context)
+        except Exception as _exc:
+            _duration = (asyncio.get_event_loop().time() - _t0) * 1000
+            if self.on_after_node is not None:
+                self.on_after_node(cur_node.id, cur_node.name, _duration, str(_exc))
+            raise
+        _duration = (asyncio.get_event_loop().time() - _t0) * 1000
+
+        # Apply side effects immediately?
         # In strictly parallel systems we might buffer this, but here
         # we assume python's GIL/single-threaded async protects atomic port writes.
         result.deserialize_result(cur_node)
-        
+
+        # ── on_after_node hook ────────────────────────────────────────────
+        if self.on_after_node is not None:
+            self.on_after_node(cur_node.id, cur_node.name, _duration, None)
+
         if cur_node.isNetwork():
             self.propogate_internal_node_outputs_to_network(cur_node)
 
@@ -428,6 +469,11 @@ class Executor:
                             target_node.inputs[edge.to_port_name].setValue(val)
                         elif edge.to_port_name in target_node.outputs:
                             target_node.outputs[edge.to_port_name].setValue(val)
+                        # ── on_edge_data hook ─────────────────────────────
+                        if self.on_edge_data is not None:
+                            self.on_edge_data(
+                                node.id, port_name, edge.to_node_id, edge.to_port_name
+                            )
 
     # Copied helper methods from NodeNetwork that are needed
     def get_upstream_nodes(self, port) -> List[Node]:
@@ -493,6 +539,10 @@ class Executor:
                 # the compute function should return a dict of output port names 
                 # to values.
                 result.deserialize_result(cur_node)
+
+                # Propagate output values to connected downstream input ports
+                # (same logic as _execute_single_node via push_data_from_node).
+                self.push_data_from_node(cur_node)
             
         
             # TODO:

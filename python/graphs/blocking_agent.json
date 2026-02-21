@@ -1,0 +1,44 @@
+{
+  "graph_name": "blocking-agent",
+  "id": "blocking-agent-v1",
+  "nodes": [
+    {
+      "id": "node_task",
+      "type": "ConstantNode",
+      "name": "Task",
+      "inputs": { "value": "What is 99 * 77?" },
+      "outputs": {}
+    },
+    {
+      "id": "node_agent",
+      "type": "ToolAgentNode",
+      "name": "Agent",
+      "inputs": {
+        "tools": ["calculator"],
+        "model": "gpt-4o-mini"
+      },
+      "outputs": {}
+    },
+    {
+      "id": "node_output",
+      "type": "PrintNode",
+      "name": "Output",
+      "inputs": {},
+      "outputs": {}
+    }
+  ],
+  "edges": [
+    {
+      "from_node": "node_task",
+      "from_port": "out",
+      "to_node":   "node_agent",
+      "to_port":   "task"
+    },
+    {
+      "from_node": "node_agent",
+      "from_port": "result",
+      "to_node":   "node_output",
+      "to_port":   "value"
+    }
+  ]
+}

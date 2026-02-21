@@ -225,7 +225,7 @@ class TestNodeNetwork:
         net.connectNodes("n1", "data_out", "n3", "data_in")
 
         src_port = n1.outputs["data_out"]
-        downstream = net.get_downstream_ports(src_port)
+        downstream = net.graph.get_downstream_ports(src_port)
 
         assert len(downstream) == 2
         assert n2.inputs["data_in"] in downstream
@@ -258,7 +258,7 @@ class TestNodeNetwork:
         
         src_port = n1.outputs["data_out"]
         # Basic edge following
-        ports = net.get_downstream_ports(src_port)
+        ports = net.graph.get_downstream_ports(src_port)
         assert len(ports) == 1
         assert ports[0] == n2.inputs["data_in"]
 
@@ -281,7 +281,7 @@ class TestNodeNetwork:
         net.connectNodes("n1", "data_out", "n2", "data_in")
 
         target_port = n2.inputs["data_in"]
-        upstream = net.get_upstream_ports(target_port)
+        upstream = net.graph.get_upstream_ports(target_port)
 
         assert len(upstream) == 1
         assert upstream[0] == n1.outputs["data_out"]
@@ -311,13 +311,13 @@ class TestNodeNetwork:
         
         # Test
         src_port = n1.outputs["data_out"]
-        downstream = net.get_downstream_ports(src_port)
+        downstream = net.graph.get_downstream_ports(src_port)
         
         assert len(downstream) == 1
         assert downstream[0] == n2.inputs["data_in"]
 
         # With IO included
-        downstream_all = net.get_downstream_ports(src_port, include_io_ports=True)
+        downstream_all = net.graph.get_downstream_ports(src_port, include_io_ports=True)
         assert len(downstream_all) == 2
         assert relay_node.inputs["io_port"] in downstream_all
 
@@ -345,7 +345,7 @@ class TestNodeNetwork:
         
         # Test upstream from n2
         target_port = n2.inputs["data_in"]
-        upstream = net.get_upstream_ports(target_port)
+        upstream = net.graph.get_upstream_ports(target_port)
         
         assert len(upstream) == 1
         assert upstream[0] == n1.outputs["data_out"]

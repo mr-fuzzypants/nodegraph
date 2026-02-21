@@ -50,6 +50,7 @@ class Graph:
         return self.nodes.get(uid)
     
 
+
     def add_edge(self, from_node_id: str, from_port_name: str, to_node_id: str, to_port_name: str) -> Edge:
         # Validation could happen here or in upper layers
         edge = Edge(from_node_id, from_port_name, to_node_id, to_port_name)
@@ -57,7 +58,40 @@ class Graph:
 
         self.incoming_edges[(to_node_id, to_port_name)].append(edge)
         self.outgoing_edges[(from_node_id, from_port_name)].append(edge)
+
+
+        assert(len(self.incoming_edges[(from_node_id, from_port_name)]) < 2 ), "Incoming edge has more than 1 edge"
+
         return edge
+
+    def delete_edge(
+        self,
+        from_node_id: str,
+        from_port_name: str,
+        to_node_id: str,
+        to_port_name: str,
+    ) -> None:
+        """Remove a specific edge from all three edge indexes."""
+
+        def _matches(e: Edge) -> bool:
+            return (
+                e.from_node_id == from_node_id
+                and e.from_port_name == from_port_name
+                and e.to_node_id == to_node_id
+                and e.to_port_name == to_port_name
+            )
+
+        self.edges = [e for e in self.edges if not _matches(e)]
+
+        key_in = (to_node_id, to_port_name)
+        self.incoming_edges[key_in] = [
+            e for e in self.incoming_edges[key_in] if not _matches(e)
+        ]
+
+        key_out = (from_node_id, from_port_name)
+        self.outgoing_edges[key_out] = [
+            e for e in self.outgoing_edges[key_out] if not _matches(e)
+        ]
 
     def get_incoming_edges(self, node_id: str, port_name: str) -> List[Edge]:
         return self.incoming_edges.get((node_id, port_name), [])

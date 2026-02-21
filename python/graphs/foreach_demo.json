@@ -1,0 +1,68 @@
+{
+  "graph_name": "foreach-demo",
+  "id": "foreach-demo-v1",
+  "nodes": [
+    {
+      "id": "node_items",
+      "type": "ConstantNode",
+      "name": "Items",
+      "inputs": {
+        "value": ["Process step 1", "Process step 2", "Process step 3"]
+      },
+      "outputs": {}
+    },
+    {
+      "id": "node_foreach",
+      "type": "ForEachNode",
+      "name": "ForEach",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "id": "node_item_printer",
+      "type": "PrintNode",
+      "name": "ItemPrinter",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "id": "node_done",
+      "type": "PrintNode",
+      "name": "Done",
+      "inputs": {},
+      "outputs": {}
+    }
+  ],
+  "edges": [
+    {
+      "from_node": "node_items",
+      "from_port": "out",
+      "to_node":   "node_foreach",
+      "to_port":   "items"
+    },
+    {
+      "from_node": "node_foreach",
+      "from_port": "loop_body",
+      "to_node":   "node_item_printer",
+      "to_port":   "exec"
+    },
+    {
+      "from_node": "node_foreach",
+      "from_port": "item",
+      "to_node":   "node_item_printer",
+      "to_port":   "value"
+    },
+    {
+      "from_node": "node_foreach",
+      "from_port": "completed",
+      "to_node":   "node_done",
+      "to_port":   "exec"
+    },
+    {
+      "from_node": "node_foreach",
+      "from_port": "total",
+      "to_node":   "node_done",
+      "to_port":   "value"
+    }
+  ]
+}

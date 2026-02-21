@@ -22,6 +22,35 @@ from .GraphPrimitives import GraphNode
 logger = logging.getLogger(__name__)
 
 
+class PluginRegistry:
+    _registry: Dict[str, Type['Node']] = {}
+
+    @classmethod
+    def register(cls, type_name: str) -> Callable[[Type['Node']], Type['Node']]:
+        """Decorator to register a node class with a specific type name."""
+        def decorator(subclass: Type['Node']) -> Type['Node']:
+            if cls._registry.get(type_name):
+                raise ValueError(f"Node type '{type_name}' is already registered.")
+            cls._registry[type_name] = subclass
+            return subclass
+        return decorator
+    
+    @classmethod
+    def get_node_class(cls, type_name: str) -> Optional[Type['Node']]:
+        return cls._registry.get(type_name)
+    
+    @classmethod
+    def create_node(cls, node_id: str, type_name: str, *args, **kwargs) -> 'Node':
+        """Factory method to create a node instance by type name."""
+        NodeClass = cls.get_node_class(type_name)
+        if not NodeClass:
+            raise ValueError(f"Unknown node type '{type_name}'")
+        return NodeClass(node_id, type_name, *args, **kwargs)
+    
+    def get_registered_types(cls) -> List[str]:
+        return list(cls._registry.keys())
+    
+
 
 # A typescript map behaves like an ordered dict in python
 class Node(INode):
@@ -261,9 +290,9 @@ class Node(INode):
             print(f".       Output Port [{output_port.port_name}] dirty: {output_port.isDirty()}; value: {output_port.value}")
     
 
-    
+    @staticmethod
     @abstractmethod
-    async def compute(self, executionContext) -> IExecutionResult:
+    async def compute(executionContext) -> IExecutionResult:
         pass
 
     def compile(self, builder: Any):

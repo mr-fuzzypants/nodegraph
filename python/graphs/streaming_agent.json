@@ -1,0 +1,81 @@
+{
+  "graph_name": "streaming-agent-simple",
+  "id": "streaming-agent-simple-v1",
+  "nodes": [
+    {
+      "id": "node_task",
+      "type": "ConstantNode",
+      "name": "Task",
+      "inputs": { "value": "What is 123 * 456? Then count the words in the answer." },
+      "outputs": {}
+    },
+    {
+      "id": "node_agent",
+      "type": "ToolAgentStreamNode",
+      "name": "Agent",
+      "inputs": {
+        "tools": ["calculator", "word_count"],
+        "model": "gpt-4o-mini"
+      },
+      "outputs": {}
+    },
+    {
+      "id": "node_step_printer",
+      "type": "StepPrinterNode",
+      "name": "StepPrinter",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "id": "node_output",
+      "type": "PrintNode",
+      "name": "Output",
+      "inputs": {},
+      "outputs": {}
+    }
+  ],
+  "edges": [
+    {
+      "from_node": "node_task",
+      "from_port": "out",
+      "to_node":   "node_agent",
+      "to_port":   "task"
+    },
+    {
+      "from_node": "node_agent",
+      "from_port": "loop_body",
+      "to_node":   "node_step_printer",
+      "to_port":   "exec"
+    },
+    {
+      "from_node": "node_agent",
+      "from_port": "step_type",
+      "to_node":   "node_step_printer",
+      "to_port":   "step_type"
+    },
+    {
+      "from_node": "node_agent",
+      "from_port": "step_content",
+      "to_node":   "node_step_printer",
+      "to_port":   "step_content"
+    },
+    {
+      "from_node": "node_agent",
+      "from_port": "tool_name",
+      "to_node":   "node_step_printer",
+      "to_port":   "tool_name"
+    },
+    {
+      "from_node": "node_agent",
+      "from_port": "completed",
+      "to_node":   "node_output",
+      "to_port":   "exec"
+    },
+    {
+      "from_node": "node_agent",
+      "from_port": "result",
+      "to_node":   "node_output",
+      "to_port":   "value"
+    }
+  ]
+}
