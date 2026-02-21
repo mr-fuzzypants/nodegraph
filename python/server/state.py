@@ -601,6 +601,59 @@ class GraphState:
         self.positions[pcl_final_img.id]  = {"x": 1860, "y": 180}
         self.positions[pcl_final_rev.id]  = {"x": 1860, "y": 420}
 
+        # ── PrivacyPipelineDemo ────────────────────────────────────────────────
+        # Demonstrates AnonymizerNode (Presidio) chained into SummarizerNode.
+        #
+        # Raw text with real PII
+        #   ↓ out → text
+        # AnonymizerNode  (operator="replace")
+        #   ├── anonymized   ──► SummarizerNode ──► SummaryOut (PrintNode)
+        #   ├── entities     ──► EntitiesOut    (PrintNode)
+        #   └── entity_count ──► CountOut       (PrintNode)
+        #
+        # The LLM in SummarizerNode only ever sees anonymized text —
+        # PII is stripped by Presidio before any data leaves the machine.
+        priv_net = net.createNetwork("PrivacyPipelineDemo", "NodeNetworkSystem")
+        self.all_networks[priv_net.id] = priv_net
+
+        priv_raw     = priv_net.createNode("RawText",    "ConstantNode")
+        priv_anon    = priv_net.createNode("Anonymizer", "AnonymizerNode")
+        priv_summ    = priv_net.createNode("Summarizer", "SummarizerNode")
+        priv_summary = priv_net.createNode("SummaryOut", "PrintNode")
+        priv_ents    = priv_net.createNode("EntitiesOut","PrintNode")
+        priv_count   = priv_net.createNode("CountOut",   "PrintNode")
+
+        priv_raw.outputs["out"].value = (
+            "Meeting notes — 2024-03-15\n"
+            "Attendees: Dr. Sarah Mitchell (sarah.mitchell@acme.com, +1-555-0192) "
+            "and John Brennan (john.brennan@acme.com).\n"
+            "John's employee ID is EMP-4829 and his SSN is 123-45-6789.\n"
+            "The team discussed the Q1 roadmap for the Phoenix project. "
+            "Budget approved: $2.4M. Launch target: June 30, 2024.\n"
+            "Action items: Sarah to review the security audit by March 22. "
+            "John to contact vendor at vendor-support@supplierco.io.\n"
+            "Next meeting: April 5 at 14:00 UTC, Room B4, 221 West 57th St, New York."
+        )
+        priv_anon.inputs["operator"].value  = "replace"
+        priv_anon.inputs["language"].value  = "en"
+        priv_summ.inputs["style"].value     = "bullet"
+        priv_summ.inputs["max_length"].value = 80
+        priv_summ.inputs["model"].value     = "gpt-4o-mini"
+
+        graph.add_edge(priv_raw.id,  "out",          priv_anon.id,    "text")
+        graph.add_edge(priv_anon.id, "anonymized",   priv_summ.id,    "text")
+        graph.add_edge(priv_summ.id, "summary",      priv_summary.id, "value")
+        graph.add_edge(priv_anon.id, "entities",     priv_ents.id,    "value")
+        graph.add_edge(priv_anon.id, "entity_count", priv_count.id,   "value")
+
+        self.positions[priv_net.id]     = {"x": 5880, "y": 180}
+        self.positions[priv_raw.id]     = {"x": 80,   "y": 280}
+        self.positions[priv_anon.id]    = {"x": 440,  "y": 280}
+        self.positions[priv_summ.id]    = {"x": 820,  "y": 180}
+        self.positions[priv_summary.id] = {"x": 1180, "y": 180}
+        self.positions[priv_ents.id]    = {"x": 820,  "y": 400}
+        self.positions[priv_count.id]   = {"x": 820,  "y": 560}
+
     # ── Network helpers ──────────────────────────────────────────────────────
 
     def get_network(self, network_id: str) -> Optional[NodeNetwork]:

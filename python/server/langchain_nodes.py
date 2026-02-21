@@ -898,3 +898,213 @@ class PromptRefinerNode(Node):
         result = ExecutionResult(ExecCommand.CONTINUE)
         result.data_outputs["refined_prompt"] = refined
         return result
+
+
+# ── AnonymizerNode ────────────────────────────────────────────────────────────
+# Detects and anonymizes PII in text using Microsoft Presidio.
+#
+# Requirements (optional — loaded lazily at execute time):
+#   pip install presidio-analyzer presidio-anonymizer
+#   python -m spacy download en_core_web_lg
+#
+# Inputs:
+#   text               (STRING) — raw text that may contain PII
+#   language           (STRING) — ISO language code, default "en"
+#   entities_to_detect (ANY)    — list of entity types to redact;
+#                                 None / [] = detect all supported types
+#   operator           (STRING) — "replace" | "redact" | "hash" | "mask"
+#                                 default "replace" → <PERSON>, <EMAIL_ADDRESS>, …
+# Outputs:
+#   anonymized   (STRING) — text with PII handled by the chosen operator
+#   entities     (ANY)    — list of {type, score, start, end, text} dicts
+#   entity_count (INT)    — number of PII entities detected
+
+_DEFAULT_ENTITIES = [
+    "PERSON", "EMAIL_ADDRESS", "PHONE_NUMBER", "CREDIT_CARD",
+    "US_SSN", "IP_ADDRESS", "LOCATION", "DATE_TIME",
+    "URL", "NRP", "MEDICAL_LICENSE", "IBAN_CODE",
+]
+
+
+@_safe_register("AnonymizerNode")
+class AnonymizerNode(Node):
+    def __init__(self, name: str, type: str = "AnonymizerNode", **kwargs):
+        super().__init__(name, type, **kwargs)
+        self.inputs["text"]               = InputDataPort(self.id, "text",               ValueType.STRING)
+        self.inputs["language"]           = InputDataPort(self.id, "language",           ValueType.STRING)
+        self.inputs["entities_to_detect"] = InputDataPort(self.id, "entities_to_detect", ValueType.ANY)
+        self.inputs["operator"]           = InputDataPort(self.id, "operator",           ValueType.STRING)
+        self.outputs["anonymized"]        = OutputDataPort(self.id, "anonymized",        ValueType.STRING)
+        self.outputs["entities"]          = OutputDataPort(self.id, "entities",          ValueType.ANY)
+        self.outputs["entity_count"]      = OutputDataPort(self.id, "entity_count",      ValueType.INT)
+
+        self.inputs["language"].value           = "en"
+        self.inputs["entities_to_detect"].value = _DEFAULT_ENTITIES
+        self.inputs["operator"].value           = "replace"
+        self.outputs["anonymized"].value        = ""
+        self.outputs["entities"].value          = []
+        self.outputs["entity_count"].value      = 0
+
+    async def compute(self, executionContext=None) -> ExecutionResult:
+        try:
+            from presidio_analyzer         import AnalyzerEngine
+            from presidio_anonymizer       import AnonymizerEngine
+            from presidio_anonymizer.entities import OperatorConfig
+        except ImportError:
+            raise ImportError(
+                "AnonymizerNode requires presidio-analyzer and presidio-anonymizer.\n"
+                "Install with:\n"
+                "  pip install presidio-analyzer presidio-anonymizer\n"
+                "  python -m spacy download en_core_web_lg"
+            )
+
+        ctx      = (executionContext or {}).get("data_inputs", {}) if executionContext else {}
+        text     = ctx.get("text",               self.inputs["text"].value)               or ""
+        language = ctx.get("language",           self.inputs["language"].value)           or "en"
+        entities = ctx.get("entities_to_detect", self.inputs["entities_to_detect"].value)
+        operator = ctx.get("operator",           self.inputs["operator"].value)           or "replace"
+
+        # Empty list → detect all; None → detect all
+        entity_filter = entities if entities else None
+
+        t0 = time.time()
+        _fire(self, "NODE_START")
+
+        analyzer   = AnalyzerEngine()
+        anonymizer = AnonymizerEngine()
+
+        analysis_results  = analyzer.analyze(
+            text=text,
+            language=language,
+            entities=entity_filter,
+        )
+        anonymized_result = anonymizer.anonymize(
+            text=text,
+            analyzer_results=analysis_results,
+            operators={"DEFAULT": OperatorConfig(operator)},
+        )
+        duration = (time.time() - t0) * 1000
+
+        anonymized_text = anonymized_result.text
+        entity_list = [
+            {
+                "type":  r.entity_type,
+                "score": round(r.score, 3),
+                "start": r.start,
+                "end":   r.end,
+                "text":  text[r.start:r.end],
+            }
+            for r in sorted(analysis_results, key=lambda r: r.start)
+        ]
+
+        self.outputs["anonymized"].value   = anonymized_text
+        self.outputs["entities"].value     = entity_list
+        self.outputs["entity_count"].value = len(entity_list)
+
+        _fire(self, "NODE_DETAIL", detail={
+            "entity_count": len(entity_list),
+            "entities":     [e["type"] for e in entity_list],
+            "operator":     operator,
+            "durationMs":   round(duration, 1),
+        })
+        _fire_edge(self, "anonymized", "anonymizer_output", anonymized_text[:200])
+
+        result = ExecutionResult(ExecCommand.CONTINUE)
+        result.data_outputs["anonymized"]   = anonymized_text
+        result.data_outputs["entities"]     = entity_list
+        result.data_outputs["entity_count"] = len(entity_list)
+        return result
+
+
+# ── SummarizerNode ────────────────────────────────────────────────────────────
+# Summarizes text using an OpenAI chat model.
+# Intended to receive anonymized text from AnonymizerNode so PII never
+# reaches the LLM in the prompt.
+#
+# Inputs:
+#   text       (STRING) — text to summarize (ideally already anonymized)
+#   max_length (INT)    — target maximum word count for the summary, default 150
+#   style      (STRING) — "paragraph" | "bullet" | "headline", default "paragraph"
+#   model      (STRING) — OpenAI model name, default "gpt-4o-mini"
+# Outputs:
+#   summary           (STRING) — the generated summary
+#   word_count        (INT)    — word count of the summary
+#   compression_ratio (FLOAT)  — len(summary) / len(input_text)
+
+@_safe_register("SummarizerNode")
+class SummarizerNode(Node):
+    def __init__(self, name: str, type: str = "SummarizerNode", **kwargs):
+        super().__init__(name, type, **kwargs)
+        self.inputs["text"]       = InputDataPort(self.id, "text",       ValueType.STRING)
+        self.inputs["max_length"] = InputDataPort(self.id, "max_length", ValueType.INT)
+        self.inputs["style"]      = InputDataPort(self.id, "style",      ValueType.STRING)
+        self.inputs["model"]      = InputDataPort(self.id, "model",      ValueType.STRING)
+        self.outputs["summary"]           = OutputDataPort(self.id, "summary",           ValueType.STRING)
+        self.outputs["word_count"]        = OutputDataPort(self.id, "word_count",        ValueType.INT)
+        self.outputs["compression_ratio"] = OutputDataPort(self.id, "compression_ratio", ValueType.FLOAT)
+
+        self.inputs["text"].value       = ""
+        self.inputs["max_length"].value = 150
+        self.inputs["style"].value      = "paragraph"   # paragraph | bullet | headline
+        self.inputs["model"].value      = "gpt-4o-mini"
+        self.outputs["summary"].value           = ""
+        self.outputs["word_count"].value        = 0
+        self.outputs["compression_ratio"].value = 0.0
+
+    async def compute(self, executionContext=None) -> ExecutionResult:
+        ctx        = (executionContext or {}).get("data_inputs", {}) if executionContext else {}
+        text       = ctx.get("text",       self.inputs["text"].value)       or ""
+        max_length = ctx.get("max_length", self.inputs["max_length"].value) or 150
+        style      = ctx.get("style",      self.inputs["style"].value)      or "paragraph"
+        model      = ctx.get("model",      self.inputs["model"].value)      or "gpt-4o-mini"
+
+        style_instruction = {
+            "bullet":    f"Summarise in concise bullet points. Maximum {max_length} words total.",
+            "headline":  f"Summarise in a single headline sentence. Maximum {max_length} words.",
+            "paragraph": f"Summarise in flowing prose. Maximum {max_length} words.",
+        }.get(style, f"Summarise in maximum {max_length} words.")
+
+        system_msg = (
+            "You are a professional summariser. "
+            "Produce a concise, accurate summary of the provided text. "
+            f"{style_instruction} "
+            "Do not add information not present in the source text. "
+            "Output ONLY the summary — no preamble, no labels, no explanations."
+        )
+
+        import openai
+
+        t0 = time.time()
+        _fire(self, "NODE_START")
+
+        client   = openai.AsyncOpenAI()
+        response = await client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_msg},
+                {"role": "user",   "content": text},
+            ],
+        )
+        duration = (time.time() - t0) * 1000
+
+        summary   = (response.choices[0].message.content or "").strip()
+        wc        = len(summary.split())
+        ratio     = round(len(summary) / max(len(text), 1), 3)
+
+        self.outputs["summary"].value           = summary
+        self.outputs["word_count"].value        = wc
+        self.outputs["compression_ratio"].value = ratio
+
+        _fire(self, "NODE_DETAIL", detail={
+            "word_count":        wc,
+            "compression_ratio": ratio,
+            "style":             style,
+            "durationMs":        round(duration, 1),
+        })
+        _fire_edge(self, "summary", "summarizer_output", summary[:200])
+
+        result = ExecutionResult(ExecCommand.CONTINUE)
+        result.data_outputs["summary"]           = summary
+        result.data_outputs["word_count"]        = wc
+        result.data_outputs["compression_ratio"] = ratio
+        return result
