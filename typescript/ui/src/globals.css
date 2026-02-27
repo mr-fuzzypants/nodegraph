@@ -1,0 +1,162 @@
+@import "tailwindcss";
+
+/* ── OpenCut Design System ─────────────────────────────────────────────────── */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  /* Fonts */
+  --font-sans: var(--font-inter), Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, monospace;
+
+  /* Border radius */
+  --radius-lg: 0.82rem;
+  --radius-md: 0.65rem;
+  --radius-sm: 0.35rem;
+
+  /* Custom font sizes (matching OpenCut's compressed scale) */
+  --text-xs: 0.72rem;
+  --text-sm: 0.79rem;
+  --text-base: 0.92rem;
+
+  /* Custom breakpoint */
+  --breakpoint-xs: 30rem;
+
+  /* Color mapping from CSS custom properties */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary-border: var(--secondary-border);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-constructive: var(--constructive);
+  --color-constructive-foreground: var(--constructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-background: var(--sidebar-background);
+}
+
+/* ── Light mode ────────────────────────────────────────────────────────────── */
+
+:root {
+  --background: hsl(0, 0%, 100%);
+  --foreground: hsl(0 0% 11%);
+  --card: hsl(0, 0%, 100%);
+  --card-foreground: hsl(0 0% 11%);
+  --popover: hsl(0, 0%, 100%);
+  --popover-hover: hsl(0, 0%, 96%);
+  --popover-foreground: hsl(0 0% 2%);
+  --primary: #009dff;
+  --primary-foreground: hsl(0, 0%, 100%);
+  --secondary: hsl(204, 100%, 97%);
+  --secondary-border: hsl(204, 100%, 94%);
+  --secondary-foreground: hsl(200, 98%, 39%);
+  --muted: hsl(0 0% 85.1%);
+  --muted-foreground: hsl(0 0% 50%);
+  --accent: hsl(0, 0%, 96%);
+  --accent-foreground: hsl(0 0% 2%);
+  --destructive: hsl(0, 83%, 50%);
+  --destructive-foreground: hsl(0, 0%, 100%);
+  --constructive: hsl(141, 71%, 48%);
+  --constructive-foreground: hsl(0, 0%, 100%);
+  --border: hsl(0 0% 91%);
+  --input: hsl(0, 0%, 100%);
+  --ring: hsl(0, 0%, 55%);
+  --sidebar: hsl(0 0% 98%);
+  --sidebar-background: hsl(0 0% 96.1%);
+}
+
+/* ── Dark mode ─────────────────────────────────────────────────────────────── */
+
+.dark {
+  --background: hsl(0, 0%, 5%);
+  --foreground: hsl(0 0% 87%);
+  --card: hsl(0, 0%, 9%);
+  --card-foreground: hsl(0 0% 87%);
+  --popover: hsl(0, 0%, 5%);
+  --popover-hover: hsl(0, 0%, 22%);
+  --popover-foreground: hsl(0 0% 95%);
+  --primary: #009dff;
+  --primary-foreground: hsl(0, 0%, 100%);
+  --secondary: hsl(204, 100%, 12%);
+  --secondary-border: hsl(204, 100%, 15%);
+  --secondary-foreground: hsl(200, 98%, 61%);
+  --muted: hsl(0 0% 20%);
+  --muted-foreground: hsl(0 0% 50%);
+  --accent: hsl(0, 0%, 14%);
+  --accent-foreground: hsl(0 0% 95%);
+  --destructive: hsl(0, 83%, 50%);
+  --destructive-foreground: hsl(0, 0%, 100%);
+  --constructive: hsl(141, 71%, 52%);
+  --constructive-foreground: hsl(0, 0%, 100%);
+  --border: hsl(0 0% 16%);
+  --input: hsl(0 0% 12%);
+  --ring: hsl(0, 0%, 50%);
+  --sidebar: hsl(0 0% 8%);
+  --sidebar-background: hsl(0 0% 6%);
+}
+
+/* ── Panel context (sidebars / inspector) ──────────────────────────────────── */
+
+:root .panel {
+  --background: hsl(216 13% 98%);
+  --input: hsl(0 0% 93%);
+  --accent: hsl(0, 0%, 93%);
+  --border: hsl(0 0% 89%);
+}
+
+.dark .panel {
+  --background: hsl(0 0% 10%);
+  --input: hsl(0 0% 22%);
+  --accent: hsl(0, 0%, 15%);
+  --border: hsl(0 0% 18%);
+}
+
+/* ── ReactFlow overrides ───────────────────────────────────────────────────── */
+
+.react-flow__controls {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.react-flow__controls-button {
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  color: var(--foreground);
+  fill: var(--foreground);
+}
+
+.react-flow__controls-button:hover {
+  background: var(--accent);
+}
+
+.react-flow__controls-button svg {
+  fill: var(--foreground);
+}
+
+.react-flow__minimap {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+/* ── Scrollbar helpers ─────────────────────────────────────────────────────── */
+
+@utility scrollbar-hidden {
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}
