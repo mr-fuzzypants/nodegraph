@@ -402,17 +402,24 @@ class Executor:
         
         if not cur_node: return (None, None)
 
-        if cur_node.isNetwork():
-            self.propogate_network_inputs_to_internal(cur_node)
-
         # Force Cook Upstream Data Dependencies (Recurisve lazy load)
         # This fixes regression where some data nodes are skipped by stack builder
         for input_port in cur_node.get_input_data_ports():
              upstream_nodes = self.get_upstream_nodes(input_port)
              for up_node in upstream_nodes:
-                 if up_node.isDataNode() and up_node.isDirty():
-                     # Recursively execute the dependency
-                     await self._execute_single_node(up_node.id)
+                 if up_node.isDataNode():
+                     # Rebuild and run the upstream data subgraph. A clean
+                     # immediate dependency may still need recomputing because
+                     # one of its own upstream sources became dirty.
+                     await self.cook_data_nodes(up_node)
+
+        # Pull values through subnet tunnel ports after upstream data nodes have
+        # cooked. Tunnel ports are graph edges, not compute nodes.
+        for input_port in cur_node.get_input_ports():
+            self._pull_input_value(input_port)
+
+        if cur_node.isNetwork():
+            self.propogate_network_inputs_to_internal(cur_node)
 
         print(f".   [1] Cooking node: {cur_node.name} ({cur_node_id})")
         print("     [1.1] Execution Context for node:", cur_node.name, ":", ExecutionContext(cur_node).to_dict())
@@ -465,6 +472,7 @@ class Executor:
             self.on_after_node(cur_node.id, cur_node.name, _duration, None)
 
         if cur_node.isNetwork():
+            await self._cook_network_output_data_dependencies(cur_node)
             self.propogate_internal_node_outputs_to_network(cur_node)
 
         self.push_data_from_node(cur_node)
@@ -502,18 +510,11 @@ class Executor:
             
             if control_value == True:
                 print(f"     [**3.1] Control output '{control_name}' is True, routing to connected nodes...")
-                edges = self.graph.get_outgoing_edges(cur_node.id, control_name)
-                # TODO: need to propagate control output values as well I think.
-                for edge in edges:
-                    to_node = self.graph.get_node_by_id(edge.to_node_id)
-                    if to_node:
-                        if to_node.inputs.get(edge.to_port_name):
-                            to_node.inputs[edge.to_port_name].setValue(control_value)
-                        elif to_node.outputs.get(edge.to_port_name):
-                            to_node.outputs[edge.to_port_name].setValue(control_value)
-
-                next_ids = [e.to_node_id for e in edges if e.to_node_id != cur_node.network_id]
-                connected_ids.extend(next_ids)
+                connected_ids.extend(
+                    self._route_control_from_endpoint(
+                        cur_node.id, control_name, control_value
+                    )
+                )
         # NEW: AgentExecutor changes — end of extracted B block, start of C block
         for next_node_id in connected_ids:
             next_node = self.graph.get_node_by_id(next_node_id)
@@ -531,7 +532,7 @@ class Executor:
             if node.isNetwork():
                 down_stream_nodes = self.get_downstream_nodes(input_port)
                 for down_node in down_stream_nodes:
-                    if (down_node.isDirty()):
+                    if input_port.isControlPort() or down_node.isDirty():
                         if down_node.id not in pending_stack:
                             pending_stack[down_node.id] = []
                             # make sure we're not adding duplicates
@@ -550,16 +551,17 @@ class Executor:
                 # Use node.network_id?
                 
                  
-                if up_node.isDirty() == False:
-                    continue
-    
                 if up_node.isDataNode():
-                    if up_node.id not in pending_stack[node.id]:
+                    upstream_needs_recompute = self.build_data_node_execution_stack(
+                        up_node, execution_stack, pending_stack
+                    )
+                    if upstream_needs_recompute and up_node.id not in pending_stack[node.id]:
+                        node.markDirty()
                         pending_stack[node.id].append(up_node.id)
-                    # build data node execution stack
-                    self.build_data_node_execution_stack(up_node, execution_stack, pending_stack)
         
                 if up_node.isNetwork():
+                    if up_node.isDirty() == False:
+                        continue
                     if up_node.id not in pending_stack[node.id]:
                         pending_stack[node.id].append(up_node.id)
 
@@ -571,7 +573,7 @@ class Executor:
         execution_stack: List[str],
         pending_stack: Dict[str, List[str]],
         _building: Optional[Set[str]] = None,
-    ):
+    ) -> bool:
         """Build the pending-stack entries for a data-node subgraph.
 
         _building is a set of node IDs currently on the DFS recursion stack.
@@ -592,44 +594,59 @@ class Executor:
         # own pending deps before making this call, so the circular dependency
         # is correctly captured in pending_stack for deadlock detection.
         if node.id in _building:
-            return
+            return True
         _building.add(node.id)
 
         print(" 1. Building data node execution stack for node:", node.name)
+        has_dirty_upstream = False
         for input_port in node.get_input_data_ports():
             upstream_nodes = self.get_upstream_nodes(input_port)
             for up_node in upstream_nodes:
                 # if up_node.id == self.id: continue # removed network check
 
-                # if the node isn't dirty, then skip it.
-                if up_node.isDirty() == False:
-                    continue
-                
                 if up_node.isDataNode(): 
-                    if up_node.id not in pending_stack[node.id]:
+                    upstream_needs_recompute = self.build_data_node_execution_stack(
+                        up_node, execution_stack, pending_stack, _building
+                    )
+                    if upstream_needs_recompute and up_node.id not in pending_stack[node.id]:
                         pending_stack[node.id].append(up_node.id)
-                    
-                    self.build_data_node_execution_stack(up_node, execution_stack, pending_stack, _building)
+                        has_dirty_upstream = True
 
         _building.discard(node.id)
+        needs_recompute = node.isDirty() or has_dirty_upstream
+        if has_dirty_upstream:
+            node.markDirty()
+
+        if not needs_recompute and not pending_stack[node.id]:
+            del pending_stack[node.id]
+
+        return needs_recompute
 
     def propogate_network_inputs_to_internal(self, network_node: Node) -> None:
         assert(network_node.isNetwork()), "propogate_network_inputs() called on non-network node"
          # this is a precompute function for subnetworks
         print("=== PRE-Computing NodeNetwork Subnet:", network_node.name, " with id:", network_node.id)
-        # 2. Tunnel Inputs: Propagate Input Data from Subnet Ports to Internal Nodes
+        # 2. Tunnel Inputs: Propagate values from subnet boundary ports to
+        # internal nodes. Data and control both use the same tunnel shape.
         for port_name, port in network_node.inputs.items():
-            if port.isDataPort() and port.value is not None:
-            #if port.value is not None:
+            if port.value is not None:
                 edges = self.graph.get_outgoing_edges(network_node.id, port_name)
                 for edge in edges:
                     target_node = self.graph.get_node_by_id(edge.to_node_id)
                     if target_node:
                         # Push to internal node ports
                         if edge.to_port_name in target_node.inputs:
-                            target_node.inputs[edge.to_port_name].setValue(port.value)
+                            target_port = target_node.inputs[edge.to_port_name]
+                            value_changed = target_port.value != port.value
+                            target_port.setValue(port.value)
+                            if value_changed and target_port.isDataPort() and target_node.isDataNode():
+                                target_node.markDirty()
                         elif edge.to_port_name in target_node.outputs:
-                            target_node.outputs[edge.to_port_name].setValue(port.value)
+                            target_port = target_node.outputs[edge.to_port_name]
+                            value_changed = target_port.value != port.value
+                            target_port.setValue(port.value)
+                            if value_changed and target_port.isDataPort() and target_node.isDataNode():
+                                target_node.markDirty()
     
     def propogate_internal_node_outputs_to_network(self, network_node: Node) -> None:
         for port_name, port in network_node.outputs.items():
@@ -644,8 +661,14 @@ class Executor:
                             val = source_node.inputs[edge.from_port_name].value
                         
                         if val is not None:
-                            port.value = val
-                            port._isDirty = False
+                            port.setValue(val)
+
+    async def _cook_network_output_data_dependencies(self, network_node: Node) -> None:
+        assert network_node.isNetwork(), "_cook_network_output_data_dependencies() called on non-network node"
+        for output_port in network_node.get_output_data_ports():
+            for up_node in self.get_upstream_nodes(output_port):
+                if up_node.isDataNode():
+                    await self.cook_data_nodes(up_node)
 
     def push_data_from_node(self, node: Node) -> None:
         for port_name, port in node.outputs.items():
@@ -668,11 +691,11 @@ class Executor:
 
     # Copied helper methods from NodeNetwork that are needed
     def get_upstream_nodes(self, port) -> List[Node]:
-        incoming_edges = self.graph.get_incoming_edges(port.node_id, port.port_name)
         upstream_nodes: List[Node] = []
-        for edge in incoming_edges:
-            source_node = self.graph.get_node_by_id(edge.from_node_id)
-            if source_node:
+        upstream_ports = self._get_upstream_ports(port)
+        for upstream_port in upstream_ports:
+            source_node = self.graph.get_node_by_id(self._port_node_id(upstream_port))
+            if source_node and source_node not in upstream_nodes:
                 upstream_nodes.append(source_node)
         return upstream_nodes
     
@@ -686,6 +709,92 @@ class Executor:
             if dest_node and dest_node not in downstream_nodes:
                 downstream_nodes.append(dest_node)
         return downstream_nodes
+
+    def _get_port(self, node_id: str, port_name: str):
+        node = self.graph.get_node_by_id(node_id)
+        if not node:
+            return None
+        return node.inputs.get(port_name) or node.outputs.get(port_name)
+
+    def _port_node_id(self, port) -> str:
+        node_id = getattr(port, "node_id", None)
+        return getattr(node_id, "id", node_id)
+
+    def _is_tunnel_port(self, port) -> bool:
+        node = self.graph.get_node_by_id(self._port_node_id(port))
+        return bool(getattr(port, "allow_multiple", False) or (node and node.isNetwork()))
+
+    def _get_upstream_ports(self, port, _seen: Optional[Set[Tuple[str, str]]] = None):
+        if _seen is None:
+            _seen = set()
+        port_node_id = self._port_node_id(port)
+        key = (port_node_id, port.port_name)
+        if key in _seen:
+            return []
+        _seen.add(key)
+
+        upstream_ports = []
+        for edge in self.graph.get_incoming_edges(port_node_id, port.port_name):
+            source_port = self._get_port(edge.from_node_id, edge.from_port_name)
+            if source_port is None:
+                continue
+            if self._is_tunnel_port(source_port):
+                upstream_ports.extend(self._get_upstream_ports(source_port, _seen))
+            else:
+                upstream_ports.append(source_port)
+        return upstream_ports
+
+    def _pull_input_value(self, port) -> None:
+        upstream_ports = self._get_upstream_ports(port)
+        if not upstream_ports:
+            return
+
+        source_port = upstream_ports[-1]
+        if source_port.value is not None:
+            port.setValue(source_port.value)
+
+    def _route_control_from_endpoint(
+        self,
+        source_node_id: str,
+        source_port_name: str,
+        control_value: Any,
+        _seen: Optional[Set[Tuple[str, str]]] = None,
+    ) -> List[str]:
+        if _seen is None:
+            _seen = set()
+        key = (source_node_id, source_port_name)
+        if key in _seen:
+            return []
+        _seen.add(key)
+
+        next_node_ids: List[str] = []
+        for edge in self.graph.get_outgoing_edges(source_node_id, source_port_name):
+            to_node = self.graph.get_node_by_id(edge.to_node_id)
+            if not to_node:
+                continue
+
+            to_port = to_node.inputs.get(edge.to_port_name)
+            to_port_is_output = False
+            if to_port is None:
+                to_port = to_node.outputs.get(edge.to_port_name)
+                to_port_is_output = to_port is not None
+            if to_port is None:
+                continue
+
+            to_port.setValue(control_value)
+
+            if to_node.isNetwork() and to_port_is_output:
+                # Internal node -> subnet output. Continue outward so control
+                # can leave the subnet without scheduling the boundary node.
+                next_node_ids.extend(
+                    self._route_control_from_endpoint(
+                        to_node.id, to_port.port_name, control_value, _seen
+                    )
+                )
+            elif to_node.id not in next_node_ids:
+                next_node_ids.append(to_node.id)
+
+        return next_node_ids
     
 
     # TODO: do we really need this?
@@ -723,6 +832,8 @@ class Executor:
             cur_node = self.graph.get_node_by_id(cur_node_id)
             if cur_node and cur_node.isDataNode():
                 print(".   Cooking node:", cur_node.name, cur_node_id)
+                for input_port in cur_node.get_input_ports():
+                    self._pull_input_value(input_port)
                 context = ExecutionContext(cur_node).to_dict()
                 print(".       Context:", context)
                 result = await cur_node.compute(context)

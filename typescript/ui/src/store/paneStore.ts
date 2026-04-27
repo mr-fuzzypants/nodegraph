@@ -47,6 +47,8 @@ export interface PaneState {
   onConnect: (connection: Connection) => Promise<void>;
   onNodesChange: (nodeId: string, x: number, y: number) => Promise<void>;
   executeNode: (nodeId: string) => Promise<void>;
+  setSelection: (nodeIds: string[], edgeIds: string[]) => void;
+  saveSelection: (name: string) => Promise<void>;
 
   /** Directly set an input port's value (for unconnected ports). */
   setPortValue: (nodeId: string, portName: string, value: any) => Promise<void>;
@@ -368,6 +370,30 @@ export function createPaneStore() {
       useTraceStore.getState().clearTrace();
       const step = useTraceStore.getState().stepModeEnabled;
       await graphClient.execute(currentNetworkId, nodeId, step);
+    },
+
+    setSelection: (nodeIds, edgeIds) => {
+      const selectedNodeIds = new Set(nodeIds);
+      const selectedEdgeIds = new Set(edgeIds);
+      set((s) => ({
+        nodes: s.nodes.map((node) => ({
+          ...node,
+          selected: selectedNodeIds.has(node.id),
+        })),
+        edges: s.edges.map((edge) => ({
+          ...edge,
+          selected: selectedEdgeIds.has(edge.id),
+        })),
+      }));
+    },
+
+    saveSelection: async (name) => {
+      const { currentNetworkId, nodes } = get();
+      if (!currentNetworkId) return;
+      const nodeIds = nodes
+        .filter((node) => node.selected && node.deletable !== false)
+        .map((node) => toGraphNodeId(node.id));
+      await graphClient.saveSelection(name, currentNetworkId, nodeIds);
     },
 
     setPortValue: async (nodeId, portName, value) => {

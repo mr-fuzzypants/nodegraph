@@ -76,6 +76,7 @@ function FlowCanvas() {
   const connectNewTunnelInputToTarget = usePaneStore((s) => s.connectNewTunnelInputToTarget);
   const connectToNewTunnelOutput = usePaneStore((s) => s.connectToNewTunnelOutput);
   const persistPosition = usePaneStore((s) => s.onNodesChange);
+  const setSelection = usePaneStore((s) => s.setSelection);
 
   // Local copy so ReactFlow can move nodes immediately without waiting for the server
   const [localNodes, setLocalNodes] = useState<FlowNode<NodeData>[]>(nodes);
@@ -88,19 +89,39 @@ function FlowCanvas() {
   // Handle node moves locally; persist on drag end
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
-      setLocalNodes((ns) => applyNodeChanges(changes, ns) as FlowNode<NodeData>[]);
+      setLocalNodes((ns) => {
+        const nextNodes = applyNodeChanges(changes, ns) as FlowNode<NodeData>[];
+        if (changes.some((c) => c.type === 'select')) {
+          setSelection(
+            nextNodes.filter((node) => node.selected).map((node) => node.id),
+            localEdges.filter((edge) => edge.selected).map((edge) => edge.id),
+          );
+        }
+        return nextNodes;
+      });
       for (const c of changes) {
         if (c.type === 'position' && !c.dragging && c.position) {
           persistPosition(c.id, c.position.x, c.position.y);
         }
       }
     },
-    [persistPosition],
+    [persistPosition, setSelection, localEdges],
   );
 
   const handleEdgesChange = useCallback(
-    (changes: EdgeChange[]) => setLocalEdges((es) => applyEdgeChanges(changes, es)),
-    [],
+    (changes: EdgeChange[]) => {
+      setLocalEdges((es) => {
+        const nextEdges = applyEdgeChanges(changes, es);
+        if (changes.some((c) => c.type === 'select')) {
+          setSelection(
+            localNodes.filter((node) => node.selected).map((node) => node.id),
+            nextEdges.filter((edge) => edge.selected).map((edge) => edge.id),
+          );
+        }
+        return nextEdges;
+      });
+    },
+    [setSelection, localNodes],
   );
 
   const handleConnect = useCallback(

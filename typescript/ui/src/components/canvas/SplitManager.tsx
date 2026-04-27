@@ -94,7 +94,11 @@ function Resizer({
 
 // ── SplitManager ───────────────────────────────────────────────────────────────
 
-export function SplitManager() {
+export function SplitManager({
+  onActivePaneChange,
+}: {
+  onActivePaneChange?: (store: PaneStore | null) => void;
+}) {
   // Initialise with one pane
   const [panes, setPanes] = useState<PaneEntry[]>(() => [
     { id: crypto.randomUUID(), store: createPaneStore() },
@@ -111,6 +115,10 @@ export function SplitManager() {
   useEffect(() => {
     return () => { dragCleanupRef.current?.(); };
   }, []);
+
+  useEffect(() => {
+    onActivePaneChange?.(panes[0]?.store ?? null);
+  }, [onActivePaneChange, panes]);
 
   // ── Pane management ──────────────────────────────────────────────────────────
 
@@ -280,6 +288,7 @@ export function SplitManager() {
                 store={pane.store}
                 paneIndex={idx}
                 onClose={panes.length > 1 ? () => closePane(pane.id) : undefined}
+                onActivate={() => onActivePaneChange?.(pane.store)}
               />
             </div>
 

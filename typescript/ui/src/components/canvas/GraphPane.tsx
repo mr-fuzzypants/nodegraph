@@ -18,9 +18,11 @@ import type { PaneStore } from '../../store/paneStore';
 function PaneInner({
   paneIndex,
   onClose,
+  onActivate,
 }: {
   paneIndex: number;
   onClose?: () => void;
+  onActivate?: () => void;
 }) {
   const { rootNetworkId, rootNetworkName } = useGraphStore((s) => ({
     rootNetworkId: s.rootNetworkId,
@@ -69,6 +71,7 @@ function PaneInner({
 
   return (
     <div
+      onMouseDown={onActivate}
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -229,15 +232,17 @@ export function GraphPane({
   store,
   paneIndex,
   onClose,
+  onActivate,
 }: {
   store: PaneStore;
   paneIndex: number;
   onClose?: () => void;
+  onActivate?: () => void;
 }) {
   return (
     <PaneContext.Provider value={store}>
       <ReactFlowProvider>
-        <PaneInner paneIndex={paneIndex} onClose={onClose} />
+        <PaneInner paneIndex={paneIndex} onClose={onClose} onActivate={onActivate} />
       </ReactFlowProvider>
     </PaneContext.Provider>
   );

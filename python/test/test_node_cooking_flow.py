@@ -269,6 +269,342 @@ class TestNodeCookingFlow:
         print("EXECUTION LOG:", EXECUTION_LOG)
         assert "InternalFlow" in EXECUTION_LOG
         assert "ExtData" in EXECUTION_LOG, "External data should be cooked via tunnel"
+
+    def test_internal_data_node_pulls_parent_data_through_subnet_input(self):
+        net = NodeNetwork.createRootNetwork("root_data_tunnel", "NodeNetworkSystem")
+        subnet = net.createNetwork("Subnet")
+
+        external_data = net.createNode("ExternalData", "DataTestNode")
+        external_data.outputs["out"].value = 123
+
+        subnet.add_data_input_port("external_in")
+        internal_add = subnet.createNode("InternalAdd", "MathAddNode")
+
+        net.connectNodesByPath(
+            "/root_data_tunnel:ExternalData",
+            "out",
+            "/root_data_tunnel/Subnet",
+            "external_in",
+        )
+        subnet.connectNodesByPath(
+            "/root_data_tunnel/Subnet",
+            "external_in",
+            "/root_data_tunnel/Subnet:InternalAdd",
+            "a",
+        )
+
+        asyncio.run(Executor(net.graph).cook_data_nodes(internal_add))
+
+        assert EXECUTION_LOG.index("ExternalData") < EXECUTION_LOG.index("InternalAdd")
+        assert internal_add.inputs["a"].value == 123
+        assert internal_add.outputs["sum"].value == 123
+
+    def test_internal_data_node_recursively_cooks_parent_data_chain(self):
+        net = NodeNetwork.createRootNetwork("root_parent_data_chain", "NodeNetworkSystem")
+        subnet = net.createNetwork("Subnet")
+
+        parent_a = net.createNode("ParentA", "DataTestNode")
+        parent_a.outputs["out"].value = 7
+        parent_b = net.createNode("ParentB", "DataTestNode")
+        parent_b.outputs["out"].value = 11
+        parent_add = net.createNode("ParentAdd", "MathAddNode")
+
+        subnet.add_data_input_port("parent_result")
+        internal_add = subnet.createNode("InternalAdd", "MathAddNode")
+
+        net.connectNodesByPath("/root_parent_data_chain:ParentA", "out", "/root_parent_data_chain:ParentAdd", "a")
+        net.connectNodesByPath("/root_parent_data_chain:ParentB", "out", "/root_parent_data_chain:ParentAdd", "b")
+        net.connectNodesByPath("/root_parent_data_chain:ParentAdd", "sum", "/root_parent_data_chain/Subnet", "parent_result")
+        subnet.connectNodesByPath(
+            "/root_parent_data_chain/Subnet",
+            "parent_result",
+            "/root_parent_data_chain/Subnet:InternalAdd",
+            "a",
+        )
+
+        asyncio.run(Executor(net.graph).cook_data_nodes(internal_add))
+
+        assert EXECUTION_LOG.index("ParentA") < EXECUTION_LOG.index("ParentAdd")
+        assert EXECUTION_LOG.index("ParentB") < EXECUTION_LOG.index("ParentAdd")
+        assert EXECUTION_LOG.index("ParentAdd") < EXECUTION_LOG.index("InternalAdd")
+        assert parent_add.outputs["sum"].value == 18
+        assert internal_add.inputs["a"].value == 18
+        assert internal_add.outputs["sum"].value == 18
+
+    def test_internal_data_node_recomputes_clean_parent_chain_with_dirty_source(self):
+        net = NodeNetwork.createRootNetwork("root_dirty_parent_chain", "NodeNetworkSystem")
+        subnet = net.createNetwork("Subnet")
+
+        parent_a = net.createNode("ParentA", "DataTestNode")
+        parent_a.outputs["out"].value = 7
+        parent_b = net.createNode("ParentB", "DataTestNode")
+        parent_b.outputs["out"].value = 11
+        parent_add = net.createNode("ParentAdd", "MathAddNode")
+
+        subnet.add_data_input_port("parent_result")
+        internal_add = subnet.createNode("InternalAdd", "MathAddNode")
+
+        net.connectNodesByPath("/root_dirty_parent_chain:ParentA", "out", "/root_dirty_parent_chain:ParentAdd", "a")
+        net.connectNodesByPath("/root_dirty_parent_chain:ParentB", "out", "/root_dirty_parent_chain:ParentAdd", "b")
+        net.connectNodesByPath("/root_dirty_parent_chain:ParentAdd", "sum", "/root_dirty_parent_chain/Subnet", "parent_result")
+        subnet.connectNodesByPath(
+            "/root_dirty_parent_chain/Subnet",
+            "parent_result",
+            "/root_dirty_parent_chain/Subnet:InternalAdd",
+            "a",
+        )
+
+        executor = Executor(net.graph)
+        asyncio.run(executor.cook_data_nodes(internal_add))
+        assert internal_add.outputs["sum"].value == 18
+
+        EXECUTION_LOG.clear()
+        parent_a.outputs["out"].value = 13
+        parent_a.markDirty()
+
+        asyncio.run(executor.cook_data_nodes(internal_add))
+
+        assert "ParentA" in EXECUTION_LOG
+        assert "ParentAdd" in EXECUTION_LOG
+        assert "InternalAdd" in EXECUTION_LOG
+        assert "ParentB" not in EXECUTION_LOG
+        assert EXECUTION_LOG.index("ParentA") < EXECUTION_LOG.index("ParentAdd")
+        assert EXECUTION_LOG.index("ParentAdd") < EXECUTION_LOG.index("InternalAdd")
+        assert parent_add.outputs["sum"].value == 24
+        assert internal_add.outputs["sum"].value == 24
+
+    def test_control_enters_and_exits_subnet_through_tunnel_ports(self):
+        net = NodeNetwork.createRootNetwork("root_control_tunnel", "NodeNetworkSystem")
+        start = net.createNode("Start", "FlowTestNode")
+        end = net.createNode("End", "FlowTestNode")
+        subnet = net.createNetwork("Subnet")
+
+        subnet.add_control_input_port("exec")
+        subnet.add_control_output_port("finished")
+        internal_flow = subnet.createNode("InternalFlow", "FlowTestNode")
+
+        net.connectNodesByPath("/root_control_tunnel:Start", "next", "/root_control_tunnel/Subnet", "exec")
+        subnet.connectNodesByPath("/root_control_tunnel/Subnet", "exec", "/root_control_tunnel/Subnet:InternalFlow", "exec")
+        subnet.connectNodesByPath("/root_control_tunnel/Subnet:InternalFlow", "next", "/root_control_tunnel/Subnet", "finished")
+        net.connectNodesByPath("/root_control_tunnel/Subnet", "finished", "/root_control_tunnel:End", "exec")
+
+        asyncio.run(Executor(net.graph).cook_flow_control_nodes(start))
+
+        assert EXECUTION_LOG == ["Start", "InternalFlow", "End"]
+
+    def test_control_tunnel_fires_clean_internal_nodes_on_later_runs(self):
+        net = NodeNetwork.createRootNetwork("root_control_tunnel_repeat", "NodeNetworkSystem")
+        start = net.createNode("Start", "FlowTestNode")
+        subnet = net.createNetwork("Subnet")
+
+        subnet.add_control_input_port("exec")
+        internal_flow = subnet.createNode("InternalFlow", "FlowTestNode")
+
+        net.connectNodesByPath("/root_control_tunnel_repeat:Start", "next", "/root_control_tunnel_repeat/Subnet", "exec")
+        subnet.connectNodesByPath("/root_control_tunnel_repeat/Subnet", "exec", "/root_control_tunnel_repeat/Subnet:InternalFlow", "exec")
+
+        executor = Executor(net.graph)
+        asyncio.run(executor.cook_flow_control_nodes(start))
+        assert EXECUTION_LOG == ["Start", "InternalFlow"]
+        assert internal_flow.isDirty() is False
+
+        EXECUTION_LOG.clear()
+        asyncio.run(executor.cook_flow_control_nodes(start))
+
+        assert EXECUTION_LOG == ["Start", "InternalFlow"]
+
+    def test_control_node_in_subnet_recooks_dirty_external_data(self):
+        net = NodeNetwork.createRootNetwork("root_control_data_tunnel", "NodeNetworkSystem")
+        start = net.createNode("Start", "FlowTestNode")
+        parent_data = net.createNode("ParentData", "DataTestNode")
+        parent_data.outputs["out"].value = 5
+        subnet = net.createNetwork("Subnet")
+
+        subnet.add_control_input_port("exec")
+        subnet.add_data_input_port("data_in")
+        internal_flow = subnet.createNode("InternalFlow", "FlowTestNode")
+
+        net.connectNodesByPath("/root_control_data_tunnel:Start", "next", "/root_control_data_tunnel/Subnet", "exec")
+        net.connectNodesByPath("/root_control_data_tunnel:ParentData", "out", "/root_control_data_tunnel/Subnet", "data_in")
+        subnet.connectNodesByPath("/root_control_data_tunnel/Subnet", "exec", "/root_control_data_tunnel/Subnet:InternalFlow", "exec")
+        subnet.connectNodesByPath("/root_control_data_tunnel/Subnet", "data_in", "/root_control_data_tunnel/Subnet:InternalFlow", "data_in")
+
+        executor = Executor(net.graph)
+        asyncio.run(executor.cook_flow_control_nodes(start))
+        assert EXECUTION_LOG == ["Start", "ParentData", "InternalFlow"]
+        assert internal_flow.inputs["data_in"].value == 5
+
+        EXECUTION_LOG.clear()
+        parent_data.outputs["out"].value = 17
+        parent_data.markDirty()
+
+        asyncio.run(executor.cook_flow_control_nodes(start))
+
+        assert EXECUTION_LOG == ["Start", "ParentData", "InternalFlow"]
+        assert internal_flow.inputs["data_in"].value == 17
+
+    def test_control_node_in_subnet_recooks_dirty_external_data_chain(self):
+        net = NodeNetwork.createRootNetwork("root_control_data_chain", "NodeNetworkSystem")
+        start = net.createNode("Start", "FlowTestNode")
+        parent_a = net.createNode("ParentA", "DataTestNode")
+        parent_a.outputs["out"].value = 3
+        parent_b = net.createNode("ParentB", "DataTestNode")
+        parent_b.outputs["out"].value = 4
+        parent_add = net.createNode("ParentAdd", "MathAddNode")
+        subnet = net.createNetwork("Subnet")
+
+        subnet.add_control_input_port("exec")
+        subnet.add_data_input_port("data_in")
+        internal_flow = subnet.createNode("InternalFlow", "FlowTestNode")
+
+        net.connectNodesByPath("/root_control_data_chain:Start", "next", "/root_control_data_chain/Subnet", "exec")
+        net.connectNodesByPath("/root_control_data_chain:ParentA", "out", "/root_control_data_chain:ParentAdd", "a")
+        net.connectNodesByPath("/root_control_data_chain:ParentB", "out", "/root_control_data_chain:ParentAdd", "b")
+        net.connectNodesByPath("/root_control_data_chain:ParentAdd", "sum", "/root_control_data_chain/Subnet", "data_in")
+        subnet.connectNodesByPath("/root_control_data_chain/Subnet", "exec", "/root_control_data_chain/Subnet:InternalFlow", "exec")
+        subnet.connectNodesByPath("/root_control_data_chain/Subnet", "data_in", "/root_control_data_chain/Subnet:InternalFlow", "data_in")
+
+        executor = Executor(net.graph)
+        asyncio.run(executor.cook_flow_control_nodes(start))
+        assert internal_flow.inputs["data_in"].value == 7
+
+        EXECUTION_LOG.clear()
+        parent_a.outputs["out"].value = 9
+        parent_a.markDirty()
+
+        asyncio.run(executor.cook_flow_control_nodes(start))
+
+        assert "Start" in EXECUTION_LOG
+        assert "ParentA" in EXECUTION_LOG
+        assert "ParentAdd" in EXECUTION_LOG
+        assert "InternalFlow" in EXECUTION_LOG
+        assert "ParentB" not in EXECUTION_LOG
+        assert EXECUTION_LOG.index("ParentA") < EXECUTION_LOG.index("ParentAdd")
+        assert EXECUTION_LOG.index("ParentAdd") < EXECUTION_LOG.index("InternalFlow")
+        assert internal_flow.inputs["data_in"].value == 13
+
+    def test_subnet_output_recooks_internal_data_after_parent_input_changes(self):
+        net = NodeNetwork.createRootNetwork("root_subnet_output_refresh", "NodeNetworkSystem")
+        start = net.createNode("Start", "FlowTestNode")
+        end = net.createNode("End", "FlowTestNode")
+        parent_a = net.createNode("ParentA", "DataTestNode")
+        parent_b = net.createNode("ParentB", "DataTestNode")
+        parent_add = net.createNode("ParentAdd", "MathAddNode")
+        subnet = net.createNetwork("Subnet")
+
+        parent_a.outputs["out"].value = 8
+        parent_b.outputs["out"].value = 25
+
+        subnet.add_control_input_port("exec")
+        subnet.add_control_output_port("next")
+        subnet.add_data_input_port("value")
+        subnet.add_data_output_port("result")
+
+        internal_two = subnet.createNode("Two", "DataTestNode")
+        internal_two.outputs["out"].value = 2
+        internal_add = subnet.createNode("InternalAdd", "MathAddNode")
+        internal_flow = subnet.createNode("InternalFlow", "FlowTestNode")
+
+        net.connectNodesByPath("/root_subnet_output_refresh:ParentA", "out", "/root_subnet_output_refresh:ParentAdd", "a")
+        net.connectNodesByPath("/root_subnet_output_refresh:ParentB", "out", "/root_subnet_output_refresh:ParentAdd", "b")
+        net.connectNodesByPath("/root_subnet_output_refresh:ParentAdd", "sum", "/root_subnet_output_refresh/Subnet", "value")
+        net.connectNodesByPath("/root_subnet_output_refresh:Start", "next", "/root_subnet_output_refresh/Subnet", "exec")
+        subnet.connectNodesByPath("/root_subnet_output_refresh/Subnet", "value", "/root_subnet_output_refresh/Subnet:InternalAdd", "a")
+        subnet.connectNodesByPath("/root_subnet_output_refresh/Subnet:Two", "out", "/root_subnet_output_refresh/Subnet:InternalAdd", "b")
+        subnet.connectNodesByPath("/root_subnet_output_refresh/Subnet:InternalAdd", "sum", "/root_subnet_output_refresh/Subnet:InternalFlow", "data_in")
+        subnet.connectNodesByPath("/root_subnet_output_refresh/Subnet:InternalAdd", "sum", "/root_subnet_output_refresh/Subnet", "result")
+        subnet.connectNodesByPath("/root_subnet_output_refresh/Subnet", "exec", "/root_subnet_output_refresh/Subnet:InternalFlow", "exec")
+        subnet.connectNodesByPath("/root_subnet_output_refresh/Subnet:InternalFlow", "next", "/root_subnet_output_refresh/Subnet", "next")
+        net.connectNodesByPath("/root_subnet_output_refresh/Subnet", "next", "/root_subnet_output_refresh:End", "exec")
+        net.connectNodesByPath("/root_subnet_output_refresh/Subnet", "result", "/root_subnet_output_refresh:End", "data_in")
+
+        executor = Executor(net.graph)
+        asyncio.run(executor.cook_flow_control_nodes(start))
+        assert end.inputs["data_in"].value == 35
+
+        EXECUTION_LOG.clear()
+        parent_b.outputs["out"].value = 30
+        parent_b.markDirty()
+
+        asyncio.run(executor.cook_flow_control_nodes(start))
+
+        assert parent_add.outputs["sum"].value == 38
+        assert internal_add.outputs["sum"].value == 40
+        assert subnet.outputs["result"].value == 40
+        assert end.inputs["data_in"].value == 40
+
+    def test_direct_internal_control_node_recooks_clean_external_data_dependency(self):
+        net = NodeNetwork.createRootNetwork("root_direct_control_data_chain", "NodeNetworkSystem")
+        parent_a = net.createNode("ParentA", "DataTestNode")
+        parent_a.outputs["out"].value = 2
+        parent_b = net.createNode("ParentB", "DataTestNode")
+        parent_b.outputs["out"].value = 5
+        parent_add = net.createNode("ParentAdd", "MathAddNode")
+        subnet = net.createNetwork("Subnet")
+
+        subnet.add_data_input_port("data_in")
+        internal_flow = subnet.createNode("InternalFlow", "FlowTestNode")
+
+        net.connectNodesByPath("/root_direct_control_data_chain:ParentA", "out", "/root_direct_control_data_chain:ParentAdd", "a")
+        net.connectNodesByPath("/root_direct_control_data_chain:ParentB", "out", "/root_direct_control_data_chain:ParentAdd", "b")
+        net.connectNodesByPath("/root_direct_control_data_chain:ParentAdd", "sum", "/root_direct_control_data_chain/Subnet", "data_in")
+        subnet.connectNodesByPath(
+            "/root_direct_control_data_chain/Subnet",
+            "data_in",
+            "/root_direct_control_data_chain/Subnet:InternalFlow",
+            "data_in",
+        )
+
+        executor = Executor(net.graph)
+        asyncio.run(executor.cook_flow_control_nodes(internal_flow))
+        assert internal_flow.inputs["data_in"].value == 7
+
+        EXECUTION_LOG.clear()
+        parent_a.outputs["out"].value = 8
+        parent_a.markDirty()
+
+        asyncio.run(executor.cook_flow_control_nodes(internal_flow))
+
+        assert "ParentA" in EXECUTION_LOG
+        assert "ParentAdd" in EXECUTION_LOG
+        assert "InternalFlow" in EXECUTION_LOG
+        assert "ParentB" not in EXECUTION_LOG
+        assert EXECUTION_LOG.index("ParentA") < EXECUTION_LOG.index("ParentAdd")
+        assert EXECUTION_LOG.index("ParentAdd") < EXECUTION_LOG.index("InternalFlow")
+        assert internal_flow.inputs["data_in"].value == 13
+
+    def test_nested_internal_control_node_recooks_dirty_data_outside_parent_subnet(self):
+        root = NodeNetwork.createRootNetwork("root_nested_control_data", "NodeNetworkSystem")
+        parent_data = root.createNode("ParentData", "DataTestNode")
+        parent_data.outputs["out"].value = 6
+        subnet_a = root.createNetwork("SubnetA")
+        subnet_b = subnet_a.createNetwork("SubnetB")
+
+        subnet_a.add_data_input_port("a_data")
+        subnet_b.add_data_input_port("b_data")
+        internal_flow = subnet_b.createNode("InternalFlow", "FlowTestNode")
+
+        root.connectNodesByPath("/root_nested_control_data:ParentData", "out", "/root_nested_control_data/SubnetA", "a_data")
+        subnet_a.connectNodesByPath("/root_nested_control_data/SubnetA", "a_data", "/root_nested_control_data/SubnetA/SubnetB", "b_data")
+        subnet_b.connectNodesByPath(
+            "/root_nested_control_data/SubnetA/SubnetB",
+            "b_data",
+            "/root_nested_control_data/SubnetA/SubnetB:InternalFlow",
+            "data_in",
+        )
+
+        executor = Executor(root.graph)
+        asyncio.run(executor.cook_flow_control_nodes(internal_flow))
+        assert internal_flow.inputs["data_in"].value == 6
+
+        EXECUTION_LOG.clear()
+        parent_data.outputs["out"].value = 14
+        parent_data.markDirty()
+
+        asyncio.run(executor.cook_flow_control_nodes(internal_flow))
+
+        assert EXECUTION_LOG == ["ParentData", "InternalFlow"]
+        assert internal_flow.inputs["data_in"].value == 14
     
     def test_nested_subnetwork_flow(self):
        

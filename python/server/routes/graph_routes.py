@@ -10,7 +10,7 @@ import os
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../..")))
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response, Body
 from fastapi.responses import JSONResponse
@@ -663,6 +663,95 @@ class SaveGraphBody(BaseModel):
     name: str
 
 
+class SaveSelectionBody(BaseModel):
+    name: str
+    networkId: str
+    nodeIds: List[str]
+
+
+def _snapshot_for_network(root_network: Any, positions: Dict[str, Dict[str, float]]) -> Dict[str, Any]:
+    """Return the on-disk graph save shape used by full graph saves."""
+    return {
+        "root_network": root_network.to_dict(),
+        "positions": positions,
+    }
+
+
+def _canonical_graph_node_id(node_id: str) -> str:
+    if node_id.endswith(":in") or node_id.endswith(":out"):
+        return node_id.rsplit(":", 1)[0]
+    return node_id
+
+
+def _collect_descendant_node_ids(node: Any) -> Set[str]:
+    node_ids = {node.id}
+    if not getattr(node, "isNetwork", lambda: False)():
+        return node_ids
+
+    graph = getattr(node, "graph", None)
+    if graph is None:
+        return node_ids
+
+    for child in graph.nodes.values():
+        if getattr(child, "network_id", None) != node.id:
+            continue
+        node_ids.update(_collect_descendant_node_ids(child))
+    return node_ids
+
+
+def _selection_snapshot(network_id: str, node_ids: List[str]) -> Dict[str, Any]:
+    network = graph_state.get_network(network_id)
+    if network is None:
+        raise HTTPException(status_code=404, detail="Network not found")
+
+    graph = network.graph
+    selected_ids = {
+        _canonical_graph_node_id(node_id)
+        for node_id in node_ids
+        if _canonical_graph_node_id(node_id) != network.id
+    }
+    direct_selected = {
+        node_id
+        for node_id in selected_ids
+        if (node := graph.nodes.get(node_id)) is not None
+        and getattr(node, "network_id", None) == network.id
+    }
+    if not direct_selected:
+        raise HTTPException(status_code=400, detail="Select at least one node to save")
+
+    root_dict = network.to_dict()
+    root_dict["graph"] = {
+        "nodes": {
+            node_id: graph.nodes[node_id].to_dict()
+            for node_id in direct_selected
+        },
+        "edges": [
+            {
+                "from_node_id": e.from_node_id,
+                "from_port_name": e.from_port_name,
+                "to_node_id": e.to_node_id,
+                "to_port_name": e.to_port_name,
+                "edge_type": e.edge_type,
+            }
+            for e in graph.edges
+            if e.from_node_id in direct_selected and e.to_node_id in direct_selected
+        ],
+    }
+
+    included_node_ids: Set[str] = set()
+    for node_id in direct_selected:
+        included_node_ids.update(_collect_descendant_node_ids(graph.nodes[node_id]))
+
+    selected_positions = {
+        key: value
+        for key, value in graph_state.positions.items()
+        if key in included_node_ids
+        or any(key.startswith(f"{node_id}:") for node_id in included_node_ids)
+    }
+
+    return _snapshot_for_network(network, selected_positions) | {"root_network": root_dict}
+
+
 @router.post("/graphs", status_code=201)
 async def save_graph(body: SaveGraphBody) -> List[Dict[str, Any]]:
     """Serialize the current graph state to *saves/{name}.json*."""
@@ -672,12 +761,33 @@ async def save_graph(body: SaveGraphBody) -> List[Dict[str, Any]]:
             status_code=400,
             detail="Graph name must be 1–80 alphanumeric / dash / space characters",
         )
-    snapshot = graph_state.to_snapshot()
+    snapshot = _snapshot_for_network(graph_state.root_network, graph_state.positions)
     fpath = _save_path(name)
     with open(fpath, "w", encoding="utf-8") as fh:
         _json.dump(snapshot, fh, indent=2)
     print(f"[graph-save] saved '{name}' → {fpath}", flush=True)
     return await list_graphs()
+
+
+@router.post("/graphs/selection", status_code=201)
+async def save_selection(body: SaveSelectionBody) -> Dict[str, Any]:
+    """Serialize selected nodes to *saves/{name}.json* using graph save shape."""
+    name = body.name.strip()
+    if not name or not _SAFE_NAME_RE.match(name):
+        raise HTTPException(
+            status_code=400,
+            detail="Graph name must be 1-80 alphanumeric / dash / space characters",
+        )
+
+    snapshot = _selection_snapshot(body.networkId, body.nodeIds)
+    fpath = _save_path(name)
+    with open(fpath, "w", encoding="utf-8") as fh:
+        _json.dump(snapshot, fh, indent=2)
+    print(
+        f"[graph-save] saved selection '{name}' ({len(body.nodeIds)} selected) -> {fpath}",
+        flush=True,
+    )
+    return {"ok": True, "name": name, "path": fpath}
 
 
 @router.post("/graphs/{name}/load")

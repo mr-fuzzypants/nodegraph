@@ -57,6 +57,15 @@ export const graphClient = {
     return api.get('/networks').then((r) => r.data);
   },
 
+  /** Save selected nodes from a network to a server-side graph JSON file. */
+  saveSelection(
+    name: string,
+    networkId: string,
+    nodeIds: string[],
+  ): Promise<{ ok: true; name: string; path: string }> {
+    return api.post('/graphs/selection', { name, networkId, nodeIds }).then((r) => r.data);
+  },
+
   /** Fetch a network's full graph */
   getNetwork(id: string): Promise<SerializedNetwork> {
     return api.get(`/networks/${id}`).then((r) => r.data);

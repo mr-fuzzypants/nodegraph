@@ -185,3 +185,30 @@ class TestNodeCooking:
         
         print("EXECUTION_LOG:", EXECUTION_LOG)
         assert EXECUTION_LOG == ["A", "B", "C"]
+
+    def test_dirty_upstream_recomputes_clean_downstream_chain(self):
+        """
+        A -> B -> C. After an initial clean cook, dirtying A should recompute
+        A, B, and C because B and C both depend on A's refreshed output.
+        """
+        net = NodeNetwork.createRootNetwork("net_dirty_chain", "NodeNetworkSystem")
+        a = net.createNode("A", "CookingTestNode")
+        b = net.createNode("B", "CookingTestNode")
+        c = net.createNode("C", "CookingTestNode")
+
+        net.connectNodes("A", "out", "B", "in")
+        net.connectNodes("B", "out", "C", "in")
+
+        executor = Executor(net.graph)
+        asyncio.run(executor.cook_data_nodes(c))
+        assert EXECUTION_LOG == ["A", "B", "C"]
+
+        EXECUTION_LOG.clear()
+        a.markDirty()
+
+        asyncio.run(executor.cook_data_nodes(c))
+
+        assert EXECUTION_LOG == ["A", "B", "C"]
+        assert a.outputs["out"].value == 2
+        assert b.outputs["out"].value == 2
+        assert c.outputs["out"].value == 2
