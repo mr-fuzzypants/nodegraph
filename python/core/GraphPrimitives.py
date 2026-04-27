@@ -1,0 +1,285 @@
+from typing import Tuple, NamedTuple, Dict, List, Optional
+#from typing import Optional, List, Dict, Any, Type, Callable, TYPE_CHECKING
+from collections import  defaultdict
+
+import uuid
+from .Interface import IGraphNode, INodePort, INode, INodeNetwork
+
+# Defining Edge as a simple data structure
+# Using NamedTuple for immutability and simple hashability if needed later
+class Edge(NamedTuple):
+    from_node_id: str
+    from_port_name: str
+    to_node_id: str
+    to_port_name: str
+    
+    # Optional metadata for debug or visualization, but core logic should rely on first 4 fields
+    edge_type: str = "default" # "data", "control"
+
+    def __repr__(self):
+        return f"Edge({self.from_node_id}.{self.from_port_name} -> {self.to_node_id}.{self.to_port_name})"
+
+
+# Base class for Nodes. Will be subclassed by actual node implementations. 
+# Contains common properties and methods required for graph traversal.
+class GraphNode(IGraphNode):
+    def __init__(self, 
+                 name: str, 
+                 type: str, 
+                 network_id: str = None
+                    ):
+        self.name = name
+        self.id = uuid.uuid4().hex
+        self.uuid = uuid.uuid4().hex  # Unique identifier for the node instance
+        self.network_id = network_id
+
+    def __repr__(self):
+        return f"GraphNode({self.id})" 
+
+class Graph:
+
+    def __init__(self):
+        self.nodes: Dict[str, IGraphNode] = {}  # Dictionary of nodes in the net
+        self.edges: List[Edge] = [] # Centralized connection storage (Arena Pattern)
+
+        self.incoming_edges = defaultdict(list)  # type: Dict[Tuple[str, str], List[Edge]]
+        self.outgoing_edges = defaultdict(list)  # type: Dict[Tuple[str, str], List[Edge]]
+    
+     # find a node in all networks by id
+    def find_node_by_id(self, uid: str) -> Optional[IGraphNode]:
+        return self.nodes.get(uid)
+    
+
+
+    def add_edge(self, from_node_id: str, from_port_name: str, to_node_id: str, to_port_name: str) -> Edge:
+        # Self-loops are never valid — a node cannot depend on itself.
+        if from_node_id == to_node_id:
+            raise ValueError(
+                f"Self-loop detected: node '{from_node_id}' cannot connect to itself "
+                f"(port '{from_port_name}' \u2192 '{to_port_name}')."
+            )
+        # Validation could happen here or in upper layers
+        edge = Edge(from_node_id, from_port_name, to_node_id, to_port_name)
+        self.edges.append(edge)
+
+        self.incoming_edges[(to_node_id, to_port_name)].append(edge)
+        self.outgoing_edges[(from_node_id, from_port_name)].append(edge)
+
+
+        assert(len(self.incoming_edges[(from_node_id, from_port_name)]) < 2 ), "Incoming edge has more than 1 edge"
+
+        return edge
+
+    def delete_edge(
+        self,
+        from_node_id: str,
+        from_port_name: str,
+        to_node_id: str,
+        to_port_name: str,
+    ) -> None:
+        """Remove a specific edge from all three edge indexes."""
+
+        def _matches(e: Edge) -> bool:
+            return (
+                e.from_node_id == from_node_id
+                and e.from_port_name == from_port_name
+                and e.to_node_id == to_node_id
+                and e.to_port_name == to_port_name
+            )
+
+        self.edges = [e for e in self.edges if not _matches(e)]
+
+        key_in = (to_node_id, to_port_name)
+        self.incoming_edges[key_in] = [
+            e for e in self.incoming_edges[key_in] if not _matches(e)
+        ]
+
+        key_out = (from_node_id, from_port_name)
+        self.outgoing_edges[key_out] = [
+            e for e in self.outgoing_edges[key_out] if not _matches(e)
+        ]
+
+    def get_incoming_edges(self, node_id: str, port_name: str) -> List[Edge]:
+        return self.incoming_edges.get((node_id, port_name), [])
+       
+    def get_outgoing_edges(self, node_id: str, port_name: str) -> List[Edge]:
+        return self.outgoing_edges.get((node_id, port_name), [])
+        
+
+
+    def add_node(self, node: IGraphNode) -> None:
+        #if self.find_node(node.id):
+        #    raise ValueError(f"Node with id '{node.id}' already exists in the global node registry {NodeNetwork.all_nodes.keys()}")
+        if self.nodes.get(node.id):
+            raise ValueError(f"Node with id '{node.name}' already exists in the network")
+       
+        
+
+        self.nodes[node.id] = node
+        # TODO: why am I not setting the network on the node here?
+        # TODO: probably should pass it in as an arg on node create.
+        #node.set_network(self) # Inject network context
+
+        print(f"### Graph: Adding node {node.name} to global registry", node.network_id)
+        self.nodes[node.id] = node
+
+    
+    # TODO: this should be get_node_by_id for clarity
+    def get_node_by_id(self, node_id: str) -> Optional[IGraphNode]:
+        return self.nodes.get(node_id)
+
+    # This method looks at nodes LOCAL to this network only
+    def get_node_by_name(self, name: str) -> Optional[IGraphNode]:
+        for node in self.nodes.values():
+            if node.name == name:
+                return node
+        return None
+    
+    def get_node_by_path(self, path: str) -> Optional[IGraphNode]:
+        for node in self.nodes.values():
+            if self.get_path(node.id) == path:
+                return node
+        return None
+    
+    def getNode(self, node_id: str) -> Optional[IGraphNode]:
+        return self.get_node_by_id(node_id)
+
+     # convenience method to get the network node object from the network id
+    def getNetwork(self, network_id: Optional[str] = None) -> 'Graph':
+        network = self.get_node_by_id(network_id)
+        if not network:
+            return None
+        #assert(network is not None), f"Network with ID '{network_id}' not found"
+        assert(network.isNetwork()), f"Node with ID '{network_id}' is not a Network"   
+        return network
+
+    # build up the path from a givent node id
+    def get_path(self, node_id) -> str:
+        
+        node = self.get_node_by_id(node_id)
+        assert(node is not None), f"Node with ID '{node_id}' not found"
+
+        path_elements = []
+        #cur_parent =self.network
+        cur_parent = self.getNetwork(node.network_id)
+        while cur_parent:
+            path_elements.append(cur_parent.name)
+            #cur_parent = cur_parent.network
+            cur_parent = self.getNetwork(cur_parent.network_id) 
+        
+        path_elements.reverse()
+        full_path = "/" + "/".join(path_elements)
+        if node.isNetwork():
+            full_path += f"/{node.name}"
+        else:
+            full_path += f":{node.name}"
+
+        # TODO: fix this hack please.
+        if full_path.startswith("//"):
+            full_path = full_path[1:]   
+        return full_path
+    
+
+    def deleteNode(self, name: str) -> None: 
+    
+        
+        node = self.get_node_by_id(name)
+        if not node:
+            raise ValueError(f"Node with id '{name}' does not exist in the network")
+        
+
+        id  = node.id
+        # Arena Pattern: Cleanup connections associated with this node
+        self.edges = [e for e in self.edges if e.from_node_id != id and e.to_node_id != id]
+
+        # TODO: deleting a node involves removing all connections to/from it first
+        # This cleanup is critical in Rust/TS to prevent orphaned pointers
+        del self.nodes[id]
+    
+    def reset(self):
+        self.nodes.clear()
+        self.edges.clear()
+        self.incoming_edges.clear()
+        self.outgoing_edges.clear()
+
+
+
+    def get_downstream_ports(self, src_port: INodePort, include_io_ports: bool=False) -> List[INodePort]:
+        #assert(False), "get_downstream_ports is deprecated, use port.get_downstream_ports instead"
+        #assert(False), "get_downstream_ports is deprecated, use port.get_downstream_ports instead"
+        downstream_ports = []
+        outgoing_edges = self.get_outgoing_edges(src_port.node_id, src_port.port_name)
+
+        for edge in outgoing_edges:
+            dest_node = self.get_node_by_id(edge.to_node_id)
+            # see if I'm connected to an input port or an output port
+            # first see if it's an input port and if not look for output port.
+            # this is because I/O ports can be in either inputs or outputs.
+            dest_port = dest_node.inputs.get(edge.to_port_name)
+            if not dest_port:
+                dest_port = dest_node.outputs.get(edge.to_port_name)
+            
+            if not dest_port:
+                continue
+        
+            # handle tunneling through tunnel ports (allow_multiple=True).
+            if getattr(dest_port, "allow_multiple", False):
+                if include_io_ports:
+                    downstream_ports.append(dest_port)
+                downstream_ports.extend(self.get_downstream_ports(dest_port, include_io_ports=include_io_ports))
+            else:
+                downstream_ports.append(dest_port)
+            
+        return downstream_ports
+
+    # NOTE: used by get_input_port_value to look upstream for the source of truth for a port's value. This is necessary because of tunneling through I/O ports, where the value may actually be coming from further upstream than the immediate connection.
+    def get_upstream_ports(self, port: INodePort, include_io_ports: bool=False) -> List[INodePort]:
+        
+        #assert(False), "get_upstream_ports is deprecated, use port.get_upstream_ports instead"
+        upstream_ports = []
+        incoming_edges = self.get_incoming_edges(port.node_id, port.port_name)
+
+        for edge in incoming_edges:
+            src_node = self.get_node_by_id(edge.from_node_id)
+            src_port = src_node.outputs.get(edge.from_port_name)
+            if not src_port:
+                src_port = src_node.inputs.get(edge.from_port_name)
+
+            if not src_port:
+                continue
+
+            # handle tunneling through tunnel ports (allow_multiple=True).
+            if getattr(src_port, "allow_multiple", False):
+                if include_io_ports:
+                    upstream_ports.append(src_port)
+                upstream_ports.extend(self.get_upstream_ports(src_port))
+            else:
+                upstream_ports.append(src_port)
+            
+        return upstream_ports
+    
+
+    def get_upstream_nodes(self, port: INodePort) -> List[IGraphNode]:
+        upstream_nodes = []
+
+        incoming_edges = self.get_incoming_edges(port.node_id, port.port_name)
+        
+        for edge in incoming_edges:
+            src_node = self.get_node_by_id(edge.from_node_id)
+            if src_node and src_node not in upstream_nodes:
+                upstream_nodes.append(src_node)
+        
+        return upstream_nodes
+    
+    def get_downstream_nodes(self, port: INodePort) -> List[IGraphNode]:
+        downstream_nodes = []
+        outgoing_edges = self.get_outgoing_edges(port.node_id, port.port_name)
+
+        for edge in outgoing_edges:
+            dest_node = self.get_node_by_id(edge.to_node_id)
+            if dest_node and dest_node not in downstream_nodes:
+                downstream_nodes.append(dest_node)
+        
+        return downstream_nodes
+    
+    

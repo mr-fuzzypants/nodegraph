@@ -1,0 +1,15 @@
+name: nodegraph
+language: python
+# Database URL used by the DBOS CLI (dbos migrate, dbos start, etc.).
+# The server reads DBOS_DATABASE_URL at runtime; this entry keeps the CLI in sync.
+#
+# SQLite (default, no setup required):
+#   system_database_url: sqlite:///nodegraph.sqlite
+#
+# PostgreSQL (set env var and uncomment to switch):
+#   system_database_url: postgresql://postgres:dbos@localhost:5432/nodegraph
+#
+system_database_url: sqlite:////Users/robertpringle/development/nodegraph/python/nodegraph.sqlite
+
+runtimeConfig:
+  start_method: fork

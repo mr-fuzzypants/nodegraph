@@ -1,0 +1,73 @@
+# macOS / editor metadata
+.DS_Store
+*.swp
+*.swo
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# Environment and local secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+.venv/
+venv/
+env/
+ENV/
+pip-wheel-metadata/
+*.egg-info/
+dist/
+build/
+
+# Jupyter / notebooks
+.ipynb_checkpoints/
+
+# Node / TypeScript
+node_modules/
+coverage/
+.nyc_output/
+dist/
+build/
+*.tsbuildinfo
+
+# Vite / frontend tooling
+.vite/
+typescript/ui/.vite/
+typescript/ui/dist/
+
+# Project-local generated data
+output/
+nodegraph.sqlite
+*.sqlite
+*.sqlite3
+*.db
+
+# Optional: uncomment these if they are generated locally and should not be published.
+# citations.txt
+# *.csv
+# *.jsonl

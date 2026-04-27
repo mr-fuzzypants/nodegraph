@@ -1,0 +1,167 @@
+{
+  "graph_name": "ksampler-demo",
+  "id": "ksampler-demo-v1",
+  "nodes": [
+    {
+      "id": "node_checkpoint",
+      "type": "CheckpointLoader",
+      "name": "Checkpoint",
+      "inputs": {
+        "ckpt_path": "/Users/robertpringle/development/ai_models"
+      },
+      "outputs": {}
+    },
+    {
+      "id": "node_positive_prompt",
+      "type": "CLIPTextEncode",
+      "name": "PositivePrompt",
+      "inputs": {
+        "text": "a small robot sketching a node graph, soft studio light"
+      },
+      "outputs": {}
+    },
+    {
+      "id": "node_negative_prompt",
+      "type": "CLIPTextEncode",
+      "name": "NegativePrompt",
+      "inputs": {
+        "text": "blurry, low quality, distorted"
+      },
+      "outputs": {}
+    },
+    {
+      "id": "node_empty_latent",
+      "type": "EmptyLatentImage",
+      "name": "EmptyLatent",
+      "inputs": {
+        "width": 512,
+        "height": 512,
+        "batch_size": 1
+      },
+      "outputs": {}
+    },
+    {
+      "id": "node_sampler",
+      "type": "KSampler",
+      "name": "KSampler",
+      "inputs": {
+        "seed": 12345,
+        "steps": 12,
+        "cfg": 7.0,
+        "sampler_name": "euler",
+        "scheduler": "normal",
+        "denoise": 1.0
+      },
+      "outputs": {}
+    },
+    {
+      "id": "node_decode",
+      "type": "VAEDecode",
+      "name": "Decode",
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "id": "node_save",
+      "type": "SaveImage",
+      "name": "SaveImage",
+      "inputs": {
+        "filename_prefix": "ksampler_demo",
+        "output_dir": "./output"
+      },
+      "outputs": {}
+    }
+  ],
+  "edges": [
+    {
+      "from_node": "node_checkpoint",
+      "from_port": "next",
+      "to_node": "node_positive_prompt",
+      "to_port": "exec"
+    },
+    {
+      "from_node": "node_checkpoint",
+      "from_port": "next",
+      "to_node": "node_negative_prompt",
+      "to_port": "exec"
+    },
+    {
+      "from_node": "node_checkpoint",
+      "from_port": "next",
+      "to_node": "node_empty_latent",
+      "to_port": "exec"
+    },
+    {
+      "from_node": "node_positive_prompt",
+      "from_port": "next",
+      "to_node": "node_sampler",
+      "to_port": "exec"
+    },
+    {
+      "from_node": "node_sampler",
+      "from_port": "next",
+      "to_node": "node_decode",
+      "to_port": "exec"
+    },
+    {
+      "from_node": "node_decode",
+      "from_port": "next",
+      "to_node": "node_save",
+      "to_port": "exec"
+    },
+    {
+      "from_node": "node_checkpoint",
+      "from_port": "MODEL",
+      "to_node": "node_sampler",
+      "to_port": "MODEL"
+    },
+    {
+      "from_node": "node_checkpoint",
+      "from_port": "CLIP",
+      "to_node": "node_positive_prompt",
+      "to_port": "CLIP"
+    },
+    {
+      "from_node": "node_checkpoint",
+      "from_port": "CLIP",
+      "to_node": "node_negative_prompt",
+      "to_port": "CLIP"
+    },
+    {
+      "from_node": "node_checkpoint",
+      "from_port": "VAE",
+      "to_node": "node_decode",
+      "to_port": "VAE"
+    },
+    {
+      "from_node": "node_positive_prompt",
+      "from_port": "CONDITIONING",
+      "to_node": "node_sampler",
+      "to_port": "positive"
+    },
+    {
+      "from_node": "node_negative_prompt",
+      "from_port": "CONDITIONING",
+      "to_node": "node_sampler",
+      "to_port": "negative"
+    },
+    {
+      "from_node": "node_empty_latent",
+      "from_port": "LATENT",
+      "to_node": "node_sampler",
+      "to_port": "latent_image"
+    },
+    {
+      "from_node": "node_sampler",
+      "from_port": "LATENT",
+      "to_node": "node_decode",
+      "to_port": "samples"
+    },
+    {
+      "from_node": "node_decode",
+      "from_port": "IMAGE",
+      "to_node": "node_save",
+      "to_port": "images"
+    }
+  ]
+}

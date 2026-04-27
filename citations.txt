@@ -1,0 +1,3637 @@
+# Code Citations
+
+## License: GPL-3.0
+https://github.com/kayhhh/houseki/blob/38cfd1204500b492b93723ee7570ced06e1e898d/packages/gltf/src/systems/exportGltf.ts
+
+```
+The file editing and terminal tools aren't currently enabled. I can provide the complete code for each change so you can apply them. Here's everything needed:
+
+---
+
+**1. Create `python/server/routes/system_routes.py`** (new file):
+
+```python
+"""
+System-level REST routes: memory reporting and cache clearing.
+
+Framework-agnostic — probes backends in priority order:
+  1. torch.mps  (Apple Silicon)
+  2. torch.cuda (NVIDIA)
+  3. Falls back to 0 / no-op if no framework is available
+"""
+from __future__ import annotations
+
+from typing import Any, Dict
+
+from fastapi import APIRouter
+
+router = APIRouter()
+
+
+def _get_allocated_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_allocated()
+    except Exception:
+        pass
+    return 0
+
+
+def _get_reserved_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_reserved()
+    except Exception:
+        pass
+    return 0
+
+
+def _clear_cache() -> str:
+    cleared = []
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
+            cleared.append("mps")
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            cleared.append("cuda")
+    except Exception as exc:
+        return f"error: {exc}"
+    return f"cleared: {', '.join(cleared)}" if cleared else "no cache to clear"
+
+
+@router.get("/system/memory")
+async def get_memory() -> Dict[str, Any]:
+    return {
+        "allocatedBytes": _get_allocated_bytes(),
+        "reservedBytes": _get_reserved_bytes(),
+    }
+
+
+@router.post("/system/clear-cache")
+async def clear_cache() -> Dict[str, Any]:
+    result = _clear_cache()
+    allocated = _get_allocated_bytes()
+    print(f"[system] clear-cache — {result}", flush=True)
+    return {"ok": True, "result": result, "allocatedBytes": allocated}
+```
+
+---
+
+**2. Add to `python/server/main.py`** — In the `app.include_router` section, add one line after the existing router include:
+
+```python
+from nodegraph.python.server.routes.system_routes import router as system_router
+# ...
+app.include_router(router, prefix="/api")
+app.include_router(system_router, prefix="/api")   # ← add this line
+```
+
+---
+
+**3. Add to `typescript/ui/src/api/graphClient.ts`** — before the closing `};`:
+
+```typescript
+  /** Get current ML-framework memory usage. */
+  getMemory(): Promise<{ allocatedBytes: number; reservedBytes: number }> {
+    return api.get('/system/memory').then((r) => r.data);
+  },
+
+  /** Flush ML-framework GPU/MPS caches. */
+  clearCache(): Promise<{ ok: boolean; result: string; allocatedBytes: number }> {
+    return api.post('/system/clear-cache').then((r) => r.data);
+  },
+```
+
+---
+
+**4. Replace the full `typescript/ui/src/App.tsx`** — add a `MemoryMeter` component and wire it into the header. Here's the complete content:
+
+```tsx
+import React, { useEffect, useRef, useState } from 'react';
+import { SplitManager } from './components/canvas/SplitManager';
+import { useGraphStore } from './store/graphStore';
+import { useTraceSocket } from './hooks/useTraceSocket';
+import { useTraceStore } from './store/traceStore';
+import { graphClient } from './api/graphClient';
+import { Button } from './components/ui/button';
+import { ThemeToggle } from './components/ThemeToggle';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { WorkflowSquare10Icon, PlayIcon, PauseIcon } from '@hugeicons/core-free-icons';
+import { StatusBar } from './components/StatusBar';
+
+// ── Memory meter ─────────────────────────────────────────────────────────────
+
+const POLL_MS = 2000;
+const METER_MAX_GB = 8; // upper end of the visual bar scale
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function MemoryMeter() {
+  
+```
+
+
+## License: GPL-3.0
+https://github.com/kayhhh/houseki/blob/38cfd1204500b492b93723ee7570ced06e1e898d/packages/gltf/src/systems/exportGltf.ts
+
+```
+The file editing and terminal tools aren't currently enabled. I can provide the complete code for each change so you can apply them. Here's everything needed:
+
+---
+
+**1. Create `python/server/routes/system_routes.py`** (new file):
+
+```python
+"""
+System-level REST routes: memory reporting and cache clearing.
+
+Framework-agnostic — probes backends in priority order:
+  1. torch.mps  (Apple Silicon)
+  2. torch.cuda (NVIDIA)
+  3. Falls back to 0 / no-op if no framework is available
+"""
+from __future__ import annotations
+
+from typing import Any, Dict
+
+from fastapi import APIRouter
+
+router = APIRouter()
+
+
+def _get_allocated_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_allocated()
+    except Exception:
+        pass
+    return 0
+
+
+def _get_reserved_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_reserved()
+    except Exception:
+        pass
+    return 0
+
+
+def _clear_cache() -> str:
+    cleared = []
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
+            cleared.append("mps")
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            cleared.append("cuda")
+    except Exception as exc:
+        return f"error: {exc}"
+    return f"cleared: {', '.join(cleared)}" if cleared else "no cache to clear"
+
+
+@router.get("/system/memory")
+async def get_memory() -> Dict[str, Any]:
+    return {
+        "allocatedBytes": _get_allocated_bytes(),
+        "reservedBytes": _get_reserved_bytes(),
+    }
+
+
+@router.post("/system/clear-cache")
+async def clear_cache() -> Dict[str, Any]:
+    result = _clear_cache()
+    allocated = _get_allocated_bytes()
+    print(f"[system] clear-cache — {result}", flush=True)
+    return {"ok": True, "result": result, "allocatedBytes": allocated}
+```
+
+---
+
+**2. Add to `python/server/main.py`** — In the `app.include_router` section, add one line after the existing router include:
+
+```python
+from nodegraph.python.server.routes.system_routes import router as system_router
+# ...
+app.include_router(router, prefix="/api")
+app.include_router(system_router, prefix="/api")   # ← add this line
+```
+
+---
+
+**3. Add to `typescript/ui/src/api/graphClient.ts`** — before the closing `};`:
+
+```typescript
+  /** Get current ML-framework memory usage. */
+  getMemory(): Promise<{ allocatedBytes: number; reservedBytes: number }> {
+    return api.get('/system/memory').then((r) => r.data);
+  },
+
+  /** Flush ML-framework GPU/MPS caches. */
+  clearCache(): Promise<{ ok: boolean; result: string; allocatedBytes: number }> {
+    return api.post('/system/clear-cache').then((r) => r.data);
+  },
+```
+
+---
+
+**4. Replace the full `typescript/ui/src/App.tsx`** — add a `MemoryMeter` component and wire it into the header. Here's the complete content:
+
+```tsx
+import React, { useEffect, useRef, useState } from 'react';
+import { SplitManager } from './components/canvas/SplitManager';
+import { useGraphStore } from './store/graphStore';
+import { useTraceSocket } from './hooks/useTraceSocket';
+import { useTraceStore } from './store/traceStore';
+import { graphClient } from './api/graphClient';
+import { Button } from './components/ui/button';
+import { ThemeToggle } from './components/ThemeToggle';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { WorkflowSquare10Icon, PlayIcon, PauseIcon } from '@hugeicons/core-free-icons';
+import { StatusBar } from './components/StatusBar';
+
+// ── Memory meter ─────────────────────────────────────────────────────────────
+
+const POLL_MS = 2000;
+const METER_MAX_GB = 8; // upper end of the visual bar scale
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function MemoryMeter() {
+  
+```
+
+
+## License: GPL-3.0
+https://github.com/kayhhh/houseki/blob/38cfd1204500b492b93723ee7570ced06e1e898d/packages/gltf/src/systems/exportGltf.ts
+
+```
+The file editing and terminal tools aren't currently enabled. I can provide the complete code for each change so you can apply them. Here's everything needed:
+
+---
+
+**1. Create `python/server/routes/system_routes.py`** (new file):
+
+```python
+"""
+System-level REST routes: memory reporting and cache clearing.
+
+Framework-agnostic — probes backends in priority order:
+  1. torch.mps  (Apple Silicon)
+  2. torch.cuda (NVIDIA)
+  3. Falls back to 0 / no-op if no framework is available
+"""
+from __future__ import annotations
+
+from typing import Any, Dict
+
+from fastapi import APIRouter
+
+router = APIRouter()
+
+
+def _get_allocated_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_allocated()
+    except Exception:
+        pass
+    return 0
+
+
+def _get_reserved_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_reserved()
+    except Exception:
+        pass
+    return 0
+
+
+def _clear_cache() -> str:
+    cleared = []
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
+            cleared.append("mps")
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            cleared.append("cuda")
+    except Exception as exc:
+        return f"error: {exc}"
+    return f"cleared: {', '.join(cleared)}" if cleared else "no cache to clear"
+
+
+@router.get("/system/memory")
+async def get_memory() -> Dict[str, Any]:
+    return {
+        "allocatedBytes": _get_allocated_bytes(),
+        "reservedBytes": _get_reserved_bytes(),
+    }
+
+
+@router.post("/system/clear-cache")
+async def clear_cache() -> Dict[str, Any]:
+    result = _clear_cache()
+    allocated = _get_allocated_bytes()
+    print(f"[system] clear-cache — {result}", flush=True)
+    return {"ok": True, "result": result, "allocatedBytes": allocated}
+```
+
+---
+
+**2. Add to `python/server/main.py`** — In the `app.include_router` section, add one line after the existing router include:
+
+```python
+from nodegraph.python.server.routes.system_routes import router as system_router
+# ...
+app.include_router(router, prefix="/api")
+app.include_router(system_router, prefix="/api")   # ← add this line
+```
+
+---
+
+**3. Add to `typescript/ui/src/api/graphClient.ts`** — before the closing `};`:
+
+```typescript
+  /** Get current ML-framework memory usage. */
+  getMemory(): Promise<{ allocatedBytes: number; reservedBytes: number }> {
+    return api.get('/system/memory').then((r) => r.data);
+  },
+
+  /** Flush ML-framework GPU/MPS caches. */
+  clearCache(): Promise<{ ok: boolean; result: string; allocatedBytes: number }> {
+    return api.post('/system/clear-cache').then((r) => r.data);
+  },
+```
+
+---
+
+**4. Replace the full `typescript/ui/src/App.tsx`** — add a `MemoryMeter` component and wire it into the header. Here's the complete content:
+
+```tsx
+import React, { useEffect, useRef, useState } from 'react';
+import { SplitManager } from './components/canvas/SplitManager';
+import { useGraphStore } from './store/graphStore';
+import { useTraceSocket } from './hooks/useTraceSocket';
+import { useTraceStore } from './store/traceStore';
+import { graphClient } from './api/graphClient';
+import { Button } from './components/ui/button';
+import { ThemeToggle } from './components/ThemeToggle';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { WorkflowSquare10Icon, PlayIcon, PauseIcon } from '@hugeicons/core-free-icons';
+import { StatusBar } from './components/StatusBar';
+
+// ── Memory meter ─────────────────────────────────────────────────────────────
+
+const POLL_MS = 2000;
+const METER_MAX_GB = 8; // upper end of the visual bar scale
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function MemoryMeter() {
+  
+```
+
+
+## License: GPL-3.0
+https://github.com/kayhhh/houseki/blob/38cfd1204500b492b93723ee7570ced06e1e898d/packages/gltf/src/systems/exportGltf.ts
+
+```
+The file editing and terminal tools aren't currently enabled. I can provide the complete code for each change so you can apply them. Here's everything needed:
+
+---
+
+**1. Create `python/server/routes/system_routes.py`** (new file):
+
+```python
+"""
+System-level REST routes: memory reporting and cache clearing.
+
+Framework-agnostic — probes backends in priority order:
+  1. torch.mps  (Apple Silicon)
+  2. torch.cuda (NVIDIA)
+  3. Falls back to 0 / no-op if no framework is available
+"""
+from __future__ import annotations
+
+from typing import Any, Dict
+
+from fastapi import APIRouter
+
+router = APIRouter()
+
+
+def _get_allocated_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_allocated()
+    except Exception:
+        pass
+    return 0
+
+
+def _get_reserved_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_reserved()
+    except Exception:
+        pass
+    return 0
+
+
+def _clear_cache() -> str:
+    cleared = []
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
+            cleared.append("mps")
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            cleared.append("cuda")
+    except Exception as exc:
+        return f"error: {exc}"
+    return f"cleared: {', '.join(cleared)}" if cleared else "no cache to clear"
+
+
+@router.get("/system/memory")
+async def get_memory() -> Dict[str, Any]:
+    return {
+        "allocatedBytes": _get_allocated_bytes(),
+        "reservedBytes": _get_reserved_bytes(),
+    }
+
+
+@router.post("/system/clear-cache")
+async def clear_cache() -> Dict[str, Any]:
+    result = _clear_cache()
+    allocated = _get_allocated_bytes()
+    print(f"[system] clear-cache — {result}", flush=True)
+    return {"ok": True, "result": result, "allocatedBytes": allocated}
+```
+
+---
+
+**2. Add to `python/server/main.py`** — In the `app.include_router` section, add one line after the existing router include:
+
+```python
+from nodegraph.python.server.routes.system_routes import router as system_router
+# ...
+app.include_router(router, prefix="/api")
+app.include_router(system_router, prefix="/api")   # ← add this line
+```
+
+---
+
+**3. Add to `typescript/ui/src/api/graphClient.ts`** — before the closing `};`:
+
+```typescript
+  /** Get current ML-framework memory usage. */
+  getMemory(): Promise<{ allocatedBytes: number; reservedBytes: number }> {
+    return api.get('/system/memory').then((r) => r.data);
+  },
+
+  /** Flush ML-framework GPU/MPS caches. */
+  clearCache(): Promise<{ ok: boolean; result: string; allocatedBytes: number }> {
+    return api.post('/system/clear-cache').then((r) => r.data);
+  },
+```
+
+---
+
+**4. Replace the full `typescript/ui/src/App.tsx`** — add a `MemoryMeter` component and wire it into the header. Here's the complete content:
+
+```tsx
+import React, { useEffect, useRef, useState } from 'react';
+import { SplitManager } from './components/canvas/SplitManager';
+import { useGraphStore } from './store/graphStore';
+import { useTraceSocket } from './hooks/useTraceSocket';
+import { useTraceStore } from './store/traceStore';
+import { graphClient } from './api/graphClient';
+import { Button } from './components/ui/button';
+import { ThemeToggle } from './components/ThemeToggle';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { WorkflowSquare10Icon, PlayIcon, PauseIcon } from '@hugeicons/core-free-icons';
+import { StatusBar } from './components/StatusBar';
+
+// ── Memory meter ─────────────────────────────────────────────────────────────
+
+const POLL_MS = 2000;
+const METER_MAX_GB = 8; // upper end of the visual bar scale
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function MemoryMeter() {
+  
+```
+
+
+## License: GPL-3.0
+https://github.com/kayhhh/houseki/blob/38cfd1204500b492b93723ee7570ced06e1e898d/packages/gltf/src/systems/exportGltf.ts
+
+```
+The file editing and terminal tools aren't currently enabled. I can provide the complete code for each change so you can apply them. Here's everything needed:
+
+---
+
+**1. Create `python/server/routes/system_routes.py`** (new file):
+
+```python
+"""
+System-level REST routes: memory reporting and cache clearing.
+
+Framework-agnostic — probes backends in priority order:
+  1. torch.mps  (Apple Silicon)
+  2. torch.cuda (NVIDIA)
+  3. Falls back to 0 / no-op if no framework is available
+"""
+from __future__ import annotations
+
+from typing import Any, Dict
+
+from fastapi import APIRouter
+
+router = APIRouter()
+
+
+def _get_allocated_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_allocated()
+    except Exception:
+        pass
+    return 0
+
+
+def _get_reserved_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_reserved()
+    except Exception:
+        pass
+    return 0
+
+
+def _clear_cache() -> str:
+    cleared = []
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
+            cleared.append("mps")
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            cleared.append("cuda")
+    except Exception as exc:
+        return f"error: {exc}"
+    return f"cleared: {', '.join(cleared)}" if cleared else "no cache to clear"
+
+
+@router.get("/system/memory")
+async def get_memory() -> Dict[str, Any]:
+    return {
+        "allocatedBytes": _get_allocated_bytes(),
+        "reservedBytes": _get_reserved_bytes(),
+    }
+
+
+@router.post("/system/clear-cache")
+async def clear_cache() -> Dict[str, Any]:
+    result = _clear_cache()
+    allocated = _get_allocated_bytes()
+    print(f"[system] clear-cache — {result}", flush=True)
+    return {"ok": True, "result": result, "allocatedBytes": allocated}
+```
+
+---
+
+**2. Add to `python/server/main.py`** — In the `app.include_router` section, add one line after the existing router include:
+
+```python
+from nodegraph.python.server.routes.system_routes import router as system_router
+# ...
+app.include_router(router, prefix="/api")
+app.include_router(system_router, prefix="/api")   # ← add this line
+```
+
+---
+
+**3. Add to `typescript/ui/src/api/graphClient.ts`** — before the closing `};`:
+
+```typescript
+  /** Get current ML-framework memory usage. */
+  getMemory(): Promise<{ allocatedBytes: number; reservedBytes: number }> {
+    return api.get('/system/memory').then((r) => r.data);
+  },
+
+  /** Flush ML-framework GPU/MPS caches. */
+  clearCache(): Promise<{ ok: boolean; result: string; allocatedBytes: number }> {
+    return api.post('/system/clear-cache').then((r) => r.data);
+  },
+```
+
+---
+
+**4. Replace the full `typescript/ui/src/App.tsx`** — add a `MemoryMeter` component and wire it into the header. Here's the complete content:
+
+```tsx
+import React, { useEffect, useRef, useState } from 'react';
+import { SplitManager } from './components/canvas/SplitManager';
+import { useGraphStore } from './store/graphStore';
+import { useTraceSocket } from './hooks/useTraceSocket';
+import { useTraceStore } from './store/traceStore';
+import { graphClient } from './api/graphClient';
+import { Button } from './components/ui/button';
+import { ThemeToggle } from './components/ThemeToggle';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { WorkflowSquare10Icon, PlayIcon, PauseIcon } from '@hugeicons/core-free-icons';
+import { StatusBar } from './components/StatusBar';
+
+// ── Memory meter ─────────────────────────────────────────────────────────────
+
+const POLL_MS = 2000;
+const METER_MAX_GB = 8; // upper end of the visual bar scale
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function MemoryMeter() {
+  
+```
+
+
+## License: GPL-3.0
+https://github.com/kayhhh/houseki/blob/38cfd1204500b492b93723ee7570ced06e1e898d/packages/gltf/src/systems/exportGltf.ts
+
+```
+The file editing and terminal tools aren't currently enabled. I can provide the complete code for each change so you can apply them. Here's everything needed:
+
+---
+
+**1. Create `python/server/routes/system_routes.py`** (new file):
+
+```python
+"""
+System-level REST routes: memory reporting and cache clearing.
+
+Framework-agnostic — probes backends in priority order:
+  1. torch.mps  (Apple Silicon)
+  2. torch.cuda (NVIDIA)
+  3. Falls back to 0 / no-op if no framework is available
+"""
+from __future__ import annotations
+
+from typing import Any, Dict
+
+from fastapi import APIRouter
+
+router = APIRouter()
+
+
+def _get_allocated_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_allocated()
+    except Exception:
+        pass
+    return 0
+
+
+def _get_reserved_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_reserved()
+    except Exception:
+        pass
+    return 0
+
+
+def _clear_cache() -> str:
+    cleared = []
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
+            cleared.append("mps")
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            cleared.append("cuda")
+    except Exception as exc:
+        return f"error: {exc}"
+    return f"cleared: {', '.join(cleared)}" if cleared else "no cache to clear"
+
+
+@router.get("/system/memory")
+async def get_memory() -> Dict[str, Any]:
+    return {
+        "allocatedBytes": _get_allocated_bytes(),
+        "reservedBytes": _get_reserved_bytes(),
+    }
+
+
+@router.post("/system/clear-cache")
+async def clear_cache() -> Dict[str, Any]:
+    result = _clear_cache()
+    allocated = _get_allocated_bytes()
+    print(f"[system] clear-cache — {result}", flush=True)
+    return {"ok": True, "result": result, "allocatedBytes": allocated}
+```
+
+---
+
+**2. Add to `python/server/main.py`** — In the `app.include_router` section, add one line after the existing router include:
+
+```python
+from nodegraph.python.server.routes.system_routes import router as system_router
+# ...
+app.include_router(router, prefix="/api")
+app.include_router(system_router, prefix="/api")   # ← add this line
+```
+
+---
+
+**3. Add to `typescript/ui/src/api/graphClient.ts`** — before the closing `};`:
+
+```typescript
+  /** Get current ML-framework memory usage. */
+  getMemory(): Promise<{ allocatedBytes: number; reservedBytes: number }> {
+    return api.get('/system/memory').then((r) => r.data);
+  },
+
+  /** Flush ML-framework GPU/MPS caches. */
+  clearCache(): Promise<{ ok: boolean; result: string; allocatedBytes: number }> {
+    return api.post('/system/clear-cache').then((r) => r.data);
+  },
+```
+
+---
+
+**4. Replace the full `typescript/ui/src/App.tsx`** — add a `MemoryMeter` component and wire it into the header. Here's the complete content:
+
+```tsx
+import React, { useEffect, useRef, useState } from 'react';
+import { SplitManager } from './components/canvas/SplitManager';
+import { useGraphStore } from './store/graphStore';
+import { useTraceSocket } from './hooks/useTraceSocket';
+import { useTraceStore } from './store/traceStore';
+import { graphClient } from './api/graphClient';
+import { Button } from './components/ui/button';
+import { ThemeToggle } from './components/ThemeToggle';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { WorkflowSquare10Icon, PlayIcon, PauseIcon } from '@hugeicons/core-free-icons';
+import { StatusBar } from './components/StatusBar';
+
+// ── Memory meter ─────────────────────────────────────────────────────────────
+
+const POLL_MS = 2000;
+const METER_MAX_GB = 8; // upper end of the visual bar scale
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function MemoryMeter() {
+  
+```
+
+
+## License: GPL-3.0
+https://github.com/kayhhh/houseki/blob/38cfd1204500b492b93723ee7570ced06e1e898d/packages/gltf/src/systems/exportGltf.ts
+
+```
+The file editing and terminal tools aren't currently enabled. I can provide the complete code for each change so you can apply them. Here's everything needed:
+
+---
+
+**1. Create `python/server/routes/system_routes.py`** (new file):
+
+```python
+"""
+System-level REST routes: memory reporting and cache clearing.
+
+Framework-agnostic — probes backends in priority order:
+  1. torch.mps  (Apple Silicon)
+  2. torch.cuda (NVIDIA)
+  3. Falls back to 0 / no-op if no framework is available
+"""
+from __future__ import annotations
+
+from typing import Any, Dict
+
+from fastapi import APIRouter
+
+router = APIRouter()
+
+
+def _get_allocated_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_allocated()
+    except Exception:
+        pass
+    return 0
+
+
+def _get_reserved_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_reserved()
+    except Exception:
+        pass
+    return 0
+
+
+def _clear_cache() -> str:
+    cleared = []
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
+            cleared.append("mps")
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            cleared.append("cuda")
+    except Exception as exc:
+        return f"error: {exc}"
+    return f"cleared: {', '.join(cleared)}" if cleared else "no cache to clear"
+
+
+@router.get("/system/memory")
+async def get_memory() -> Dict[str, Any]:
+    return {
+        "allocatedBytes": _get_allocated_bytes(),
+        "reservedBytes": _get_reserved_bytes(),
+    }
+
+
+@router.post("/system/clear-cache")
+async def clear_cache() -> Dict[str, Any]:
+    result = _clear_cache()
+    allocated = _get_allocated_bytes()
+    print(f"[system] clear-cache — {result}", flush=True)
+    return {"ok": True, "result": result, "allocatedBytes": allocated}
+```
+
+---
+
+**2. Add to `python/server/main.py`** — In the `app.include_router` section, add one line after the existing router include:
+
+```python
+from nodegraph.python.server.routes.system_routes import router as system_router
+# ...
+app.include_router(router, prefix="/api")
+app.include_router(system_router, prefix="/api")   # ← add this line
+```
+
+---
+
+**3. Add to `typescript/ui/src/api/graphClient.ts`** — before the closing `};`:
+
+```typescript
+  /** Get current ML-framework memory usage. */
+  getMemory(): Promise<{ allocatedBytes: number; reservedBytes: number }> {
+    return api.get('/system/memory').then((r) => r.data);
+  },
+
+  /** Flush ML-framework GPU/MPS caches. */
+  clearCache(): Promise<{ ok: boolean; result: string; allocatedBytes: number }> {
+    return api.post('/system/clear-cache').then((r) => r.data);
+  },
+```
+
+---
+
+**4. Replace the full `typescript/ui/src/App.tsx`** — add a `MemoryMeter` component and wire it into the header. Here's the complete content:
+
+```tsx
+import React, { useEffect, useRef, useState } from 'react';
+import { SplitManager } from './components/canvas/SplitManager';
+import { useGraphStore } from './store/graphStore';
+import { useTraceSocket } from './hooks/useTraceSocket';
+import { useTraceStore } from './store/traceStore';
+import { graphClient } from './api/graphClient';
+import { Button } from './components/ui/button';
+import { ThemeToggle } from './components/ThemeToggle';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { WorkflowSquare10Icon, PlayIcon, PauseIcon } from '@hugeicons/core-free-icons';
+import { StatusBar } from './components/StatusBar';
+
+// ── Memory meter ─────────────────────────────────────────────────────────────
+
+const POLL_MS = 2000;
+const METER_MAX_GB = 8; // upper end of the visual bar scale
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function MemoryMeter() {
+  
+```
+
+
+## License: GPL-3.0
+https://github.com/kayhhh/houseki/blob/38cfd1204500b492b93723ee7570ced06e1e898d/packages/gltf/src/systems/exportGltf.ts
+
+```
+The file editing and terminal tools aren't currently enabled. I can provide the complete code for each change so you can apply them. Here's everything needed:
+
+---
+
+**1. Create `python/server/routes/system_routes.py`** (new file):
+
+```python
+"""
+System-level REST routes: memory reporting and cache clearing.
+
+Framework-agnostic — probes backends in priority order:
+  1. torch.mps  (Apple Silicon)
+  2. torch.cuda (NVIDIA)
+  3. Falls back to 0 / no-op if no framework is available
+"""
+from __future__ import annotations
+
+from typing import Any, Dict
+
+from fastapi import APIRouter
+
+router = APIRouter()
+
+
+def _get_allocated_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_allocated()
+    except Exception:
+        pass
+    return 0
+
+
+def _get_reserved_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_reserved()
+    except Exception:
+        pass
+    return 0
+
+
+def _clear_cache() -> str:
+    cleared = []
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
+            cleared.append("mps")
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            cleared.append("cuda")
+    except Exception as exc:
+        return f"error: {exc}"
+    return f"cleared: {', '.join(cleared)}" if cleared else "no cache to clear"
+
+
+@router.get("/system/memory")
+async def get_memory() -> Dict[str, Any]:
+    return {
+        "allocatedBytes": _get_allocated_bytes(),
+        "reservedBytes": _get_reserved_bytes(),
+    }
+
+
+@router.post("/system/clear-cache")
+async def clear_cache() -> Dict[str, Any]:
+    result = _clear_cache()
+    allocated = _get_allocated_bytes()
+    print(f"[system] clear-cache — {result}", flush=True)
+    return {"ok": True, "result": result, "allocatedBytes": allocated}
+```
+
+---
+
+**2. Add to `python/server/main.py`** — In the `app.include_router` section, add one line after the existing router include:
+
+```python
+from nodegraph.python.server.routes.system_routes import router as system_router
+# ...
+app.include_router(router, prefix="/api")
+app.include_router(system_router, prefix="/api")   # ← add this line
+```
+
+---
+
+**3. Add to `typescript/ui/src/api/graphClient.ts`** — before the closing `};`:
+
+```typescript
+  /** Get current ML-framework memory usage. */
+  getMemory(): Promise<{ allocatedBytes: number; reservedBytes: number }> {
+    return api.get('/system/memory').then((r) => r.data);
+  },
+
+  /** Flush ML-framework GPU/MPS caches. */
+  clearCache(): Promise<{ ok: boolean; result: string; allocatedBytes: number }> {
+    return api.post('/system/clear-cache').then((r) => r.data);
+  },
+```
+
+---
+
+**4. Replace the full `typescript/ui/src/App.tsx`** — add a `MemoryMeter` component and wire it into the header. Here's the complete content:
+
+```tsx
+import React, { useEffect, useRef, useState } from 'react';
+import { SplitManager } from './components/canvas/SplitManager';
+import { useGraphStore } from './store/graphStore';
+import { useTraceSocket } from './hooks/useTraceSocket';
+import { useTraceStore } from './store/traceStore';
+import { graphClient } from './api/graphClient';
+import { Button } from './components/ui/button';
+import { ThemeToggle } from './components/ThemeToggle';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { WorkflowSquare10Icon, PlayIcon, PauseIcon } from '@hugeicons/core-free-icons';
+import { StatusBar } from './components/StatusBar';
+
+// ── Memory meter ─────────────────────────────────────────────────────────────
+
+const POLL_MS = 2000;
+const METER_MAX_GB = 8; // upper end of the visual bar scale
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function MemoryMeter() {
+  
+```
+
+
+## License: GPL-3.0
+https://github.com/kayhhh/houseki/blob/38cfd1204500b492b93723ee7570ced06e1e898d/packages/gltf/src/systems/exportGltf.ts
+
+```
+The file editing and terminal tools aren't currently enabled. I can provide the complete code for each change so you can apply them. Here's everything needed:
+
+---
+
+**1. Create `python/server/routes/system_routes.py`** (new file):
+
+```python
+"""
+System-level REST routes: memory reporting and cache clearing.
+
+Framework-agnostic — probes backends in priority order:
+  1. torch.mps  (Apple Silicon)
+  2. torch.cuda (NVIDIA)
+  3. Falls back to 0 / no-op if no framework is available
+"""
+from __future__ import annotations
+
+from typing import Any, Dict
+
+from fastapi import APIRouter
+
+router = APIRouter()
+
+
+def _get_allocated_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_allocated()
+    except Exception:
+        pass
+    return 0
+
+
+def _get_reserved_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_reserved()
+    except Exception:
+        pass
+    return 0
+
+
+def _clear_cache() -> str:
+    cleared = []
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
+            cleared.append("mps")
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            cleared.append("cuda")
+    except Exception as exc:
+        return f"error: {exc}"
+    return f"cleared: {', '.join(cleared)}" if cleared else "no cache to clear"
+
+
+@router.get("/system/memory")
+async def get_memory() -> Dict[str, Any]:
+    return {
+        "allocatedBytes": _get_allocated_bytes(),
+        "reservedBytes": _get_reserved_bytes(),
+    }
+
+
+@router.post("/system/clear-cache")
+async def clear_cache() -> Dict[str, Any]:
+    result = _clear_cache()
+    allocated = _get_allocated_bytes()
+    print(f"[system] clear-cache — {result}", flush=True)
+    return {"ok": True, "result": result, "allocatedBytes": allocated}
+```
+
+---
+
+**2. Add to `python/server/main.py`** — In the `app.include_router` section, add one line after the existing router include:
+
+```python
+from nodegraph.python.server.routes.system_routes import router as system_router
+# ...
+app.include_router(router, prefix="/api")
+app.include_router(system_router, prefix="/api")   # ← add this line
+```
+
+---
+
+**3. Add to `typescript/ui/src/api/graphClient.ts`** — before the closing `};`:
+
+```typescript
+  /** Get current ML-framework memory usage. */
+  getMemory(): Promise<{ allocatedBytes: number; reservedBytes: number }> {
+    return api.get('/system/memory').then((r) => r.data);
+  },
+
+  /** Flush ML-framework GPU/MPS caches. */
+  clearCache(): Promise<{ ok: boolean; result: string; allocatedBytes: number }> {
+    return api.post('/system/clear-cache').then((r) => r.data);
+  },
+```
+
+---
+
+**4. Replace the full `typescript/ui/src/App.tsx`** — add a `MemoryMeter` component and wire it into the header. Here's the complete content:
+
+```tsx
+import React, { useEffect, useRef, useState } from 'react';
+import { SplitManager } from './components/canvas/SplitManager';
+import { useGraphStore } from './store/graphStore';
+import { useTraceSocket } from './hooks/useTraceSocket';
+import { useTraceStore } from './store/traceStore';
+import { graphClient } from './api/graphClient';
+import { Button } from './components/ui/button';
+import { ThemeToggle } from './components/ThemeToggle';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { WorkflowSquare10Icon, PlayIcon, PauseIcon } from '@hugeicons/core-free-icons';
+import { StatusBar } from './components/StatusBar';
+
+// ── Memory meter ─────────────────────────────────────────────────────────────
+
+const POLL_MS = 2000;
+const METER_MAX_GB = 8; // upper end of the visual bar scale
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function MemoryMeter() {
+  
+```
+
+
+## License: GPL-3.0
+https://github.com/stephnr/super-node-starter/blob/6ed3d608f9faae27ecc14f157e6c82e7cfe5c980/src/models/common.ts
+
+```
+The file editing and terminal tools aren't currently enabled. I can provide the complete code for each change so you can apply them. Here's everything needed:
+
+---
+
+**1. Create `python/server/routes/system_routes.py`** (new file):
+
+```python
+"""
+System-level REST routes: memory reporting and cache clearing.
+
+Framework-agnostic — probes backends in priority order:
+  1. torch.mps  (Apple Silicon)
+  2. torch.cuda (NVIDIA)
+  3. Falls back to 0 / no-op if no framework is available
+"""
+from __future__ import annotations
+
+from typing import Any, Dict
+
+from fastapi import APIRouter
+
+router = APIRouter()
+
+
+def _get_allocated_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_allocated()
+    except Exception:
+        pass
+    return 0
+
+
+def _get_reserved_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_reserved()
+    except Exception:
+        pass
+    return 0
+
+
+def _clear_cache() -> str:
+    cleared = []
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
+            cleared.append("mps")
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            cleared.append("cuda")
+    except Exception as exc:
+        return f"error: {exc}"
+    return f"cleared: {', '.join(cleared)}" if cleared else "no cache to clear"
+
+
+@router.get("/system/memory")
+async def get_memory() -> Dict[str, Any]:
+    return {
+        "allocatedBytes": _get_allocated_bytes(),
+        "reservedBytes": _get_reserved_bytes(),
+    }
+
+
+@router.post("/system/clear-cache")
+async def clear_cache() -> Dict[str, Any]:
+    result = _clear_cache()
+    allocated = _get_allocated_bytes()
+    print(f"[system] clear-cache — {result}", flush=True)
+    return {"ok": True, "result": result, "allocatedBytes": allocated}
+```
+
+---
+
+**2. Add to `python/server/main.py`** — In the `app.include_router` section, add one line after the existing router include:
+
+```python
+from nodegraph.python.server.routes.system_routes import router as system_router
+# ...
+app.include_router(router, prefix="/api")
+app.include_router(system_router, prefix="/api")   # ← add this line
+```
+
+---
+
+**3. Add to `typescript/ui/src/api/graphClient.ts`** — before the closing `};`:
+
+```typescript
+  /** Get current ML-framework memory usage. */
+  getMemory(): Promise<{ allocatedBytes: number; reservedBytes: number }> {
+    return api.get('/system/memory').then((r) => r.data);
+  },
+
+  /** Flush ML-framework GPU/MPS caches. */
+  clearCache(): Promise<{ ok: boolean; result: string; allocatedBytes: number }> {
+    return api.post('/system/clear-cache').then((r) => r.data);
+  },
+```
+
+---
+
+**4. Replace the full `typescript/ui/src/App.tsx`** — add a `MemoryMeter` component and wire it into the header. Here's the complete content:
+
+```tsx
+import React, { useEffect, useRef, useState } from 'react';
+import { SplitManager } from './components/canvas/SplitManager';
+import { useGraphStore } from './store/graphStore';
+import { useTraceSocket } from './hooks/useTraceSocket';
+import { useTraceStore } from './store/traceStore';
+import { graphClient } from './api/graphClient';
+import { Button } from './components/ui/button';
+import { ThemeToggle } from './components/ThemeToggle';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { WorkflowSquare10Icon, PlayIcon, PauseIcon } from '@hugeicons/core-free-icons';
+import { StatusBar } from './components/StatusBar';
+
+// ── Memory meter ─────────────────────────────────────────────────────────────
+
+const POLL_MS = 2000;
+const METER_MAX_GB = 8; // upper end of the visual bar scale
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function MemoryMeter() {
+  const [allocated, setAllocated] = useState(0);
+  const [clearing, setClearing] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const poll = () => {
+      graphClient.getMemory().then(({ allocatedBytes }) => {
+        if (!cancelled) setAllocated(allocatedBytes);
+      }).catch(() => {});
+    };
+    poll();
+    const id = setInterval(poll, POLL_MS);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
+
+  const handleClear = async () => {
+    setClearing(true);
+    try {
+      const { allocatedBytes } = await graphClient.clearCache();
+      setAllocated(allocatedBytes);
+    } catch (_) {/* ignore */} finally {
+      setClearing(false);
+    }
+  };
+
+  const pct = Math.min(1, allocated / (METER_MAX_GB * 1024 * 1024 * 1024));
+  const barColor = pct > 0.85 ? '#f38ba8' : pct > 0.6 ? '#fab387' : '#a6e3a1';
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        fontSize: 10,
+        fontFamily: 'monospace',
+        color: 'var(--muted-foreground)',
+        userSelect: 'none',
+      }}
+    >
+      {/* Label */}
+      <span style={{ color: 'var(--muted-foreground)', opacity: 0.7, fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        VRAM
+      </span>
+
+      {/* Bar */}
+      <div
+        title={`Allocated: ${formatBytes(allocated)}`}
+        style={{
+          width: 64,
+          height: 8,
+          borderRadius: 4,
+          background: 'var(--border)',
+          overflow: 'hidden',
+          position: 'relative',
+          cursor: 'default',
+        }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: `${pct * 100}%`,
+            background: barColor,
+            borderRadius: 4,
+            transition: 'width 0.4s ease, background 0.4s ease',
+          }}
+        />
+      </div>
+
+      {/* Value */}
+      <span style={{ minWidth: 44, textAlign: 'right', fontSize: 10 }}>
+        {formatBytes(allocated)}
+      </span>
+
+      {/* Clear cache button */}
+      <button
+        onClick={handleClear}
+        disabled={clearing}
+        title="Clear ML framework memory cache"
+        style={{
+          background: 'none',
+          border: '1px solid var(--border)',
+          borderRadius: 4,
+          color: 'var(--muted-foreground)',
+          cursor: clearing ? 'default' : 'pointer',
+          fontSize: 9,
+          padding: '1px 6px',
+          opacity: clearing ? 0.5 : 1,
+          transition: 'background 0.15s, color 0.15s',
+          fontFamily: 'monospace',
+        }}
+        onMouseEnter={(e) => {
+          if (!clearing) {
+            (e.currentTarget as HTMLElement).style.background = 'var(--accent)';
+            (e.currentTarget as HTMLElement).style.color = 'var(--foreground)';
+          }
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLElement).style.background = 'none';
+          (e.currentTarget as HTMLElement).style.color = 'var(--muted-foreground)';
+        }}
+      >
+        {clearing ? '…' : 'clear'}
+      </button>
+    </div>
+  );
+}
+
+// ── App ───────────────────────────────────────────────────────────────────────
+
+export default function App() {
+  const { init
+```
+
+
+## License: MIT
+https://github.com/mrozilla/mrozilla.cz/blob/b3fa715b7759650406316124387f6aaf29d0eb1b/src/components/interactive/TextAreaInput.js
+
+```
+The file editing and terminal tools aren't currently enabled. I can provide the complete code for each change so you can apply them. Here's everything needed:
+
+---
+
+**1. Create `python/server/routes/system_routes.py`** (new file):
+
+```python
+"""
+System-level REST routes: memory reporting and cache clearing.
+
+Framework-agnostic — probes backends in priority order:
+  1. torch.mps  (Apple Silicon)
+  2. torch.cuda (NVIDIA)
+  3. Falls back to 0 / no-op if no framework is available
+"""
+from __future__ import annotations
+
+from typing import Any, Dict
+
+from fastapi import APIRouter
+
+router = APIRouter()
+
+
+def _get_allocated_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_allocated()
+    except Exception:
+        pass
+    return 0
+
+
+def _get_reserved_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_reserved()
+    except Exception:
+        pass
+    return 0
+
+
+def _clear_cache() -> str:
+    cleared = []
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
+            cleared.append("mps")
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            cleared.append("cuda")
+    except Exception as exc:
+        return f"error: {exc}"
+    return f"cleared: {', '.join(cleared)}" if cleared else "no cache to clear"
+
+
+@router.get("/system/memory")
+async def get_memory() -> Dict[str, Any]:
+    return {
+        "allocatedBytes": _get_allocated_bytes(),
+        "reservedBytes": _get_reserved_bytes(),
+    }
+
+
+@router.post("/system/clear-cache")
+async def clear_cache() -> Dict[str, Any]:
+    result = _clear_cache()
+    allocated = _get_allocated_bytes()
+    print(f"[system] clear-cache — {result}", flush=True)
+    return {"ok": True, "result": result, "allocatedBytes": allocated}
+```
+
+---
+
+**2. Add to `python/server/main.py`** — In the `app.include_router` section, add one line after the existing router include:
+
+```python
+from nodegraph.python.server.routes.system_routes import router as system_router
+# ...
+app.include_router(router, prefix="/api")
+app.include_router(system_router, prefix="/api")   # ← add this line
+```
+
+---
+
+**3. Add to `typescript/ui/src/api/graphClient.ts`** — before the closing `};`:
+
+```typescript
+  /** Get current ML-framework memory usage. */
+  getMemory(): Promise<{ allocatedBytes: number; reservedBytes: number }> {
+    return api.get('/system/memory').then((r) => r.data);
+  },
+
+  /** Flush ML-framework GPU/MPS caches. */
+  clearCache(): Promise<{ ok: boolean; result: string; allocatedBytes: number }> {
+    return api.post('/system/clear-cache').then((r) => r.data);
+  },
+```
+
+---
+
+**4. Replace the full `typescript/ui/src/App.tsx`** — add a `MemoryMeter` component and wire it into the header. Here's the complete content:
+
+```tsx
+import React, { useEffect, useRef, useState } from 'react';
+import { SplitManager } from './components/canvas/SplitManager';
+import { useGraphStore } from './store/graphStore';
+import { useTraceSocket } from './hooks/useTraceSocket';
+import { useTraceStore } from './store/traceStore';
+import { graphClient } from './api/graphClient';
+import { Button } from './components/ui/button';
+import { ThemeToggle } from './components/ThemeToggle';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { WorkflowSquare10Icon, PlayIcon, PauseIcon } from '@hugeicons/core-free-icons';
+import { StatusBar } from './components/StatusBar';
+
+// ── Memory meter ─────────────────────────────────────────────────────────────
+
+const POLL_MS = 2000;
+const METER_MAX_GB = 8; // upper end of the visual bar scale
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function MemoryMeter() {
+  const [allocated, setAllocated] = useState(0);
+  const [clearing, setClearing] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const poll = () => {
+      graphClient.getMemory().then(({ allocatedBytes }) => {
+        if (!cancelled) setAllocated(allocatedBytes);
+      }).catch(() => {});
+    };
+    poll();
+    const id = setInterval(poll, POLL_MS);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
+
+  const handleClear = async () => {
+    setClearing(true);
+    try {
+      const { allocatedBytes } = await graphClient.clearCache();
+      setAllocated(allocatedBytes);
+    } catch (_) {/* ignore */} finally {
+      setClearing(false);
+    }
+  };
+
+  const pct = Math.min(1, allocated / (METER_MAX_GB * 1024 * 1024 * 1024));
+  const barColor = pct > 0.85 ? '#f38ba8' : pct > 0.6 ? '#fab387' : '#a6e3a1';
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        fontSize: 10,
+        fontFamily: 'monospace',
+        color: 'var(--muted-foreground)',
+        userSelect: 'none',
+      }}
+    >
+      {/* Label */}
+      <span style={{ color: 'var(--muted-foreground)', opacity: 0.7, fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        VRAM
+      </span>
+
+      {/* Bar */}
+      <div
+        title={`Allocated: ${formatBytes(allocated)}`}
+        style={{
+          width: 64,
+          height: 8,
+          borderRadius: 4,
+          background: 'var(--border)',
+          overflow: 'hidden',
+          position: 'relative',
+          cursor: 'default',
+        }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: `${pct * 100}%`,
+            background: barColor,
+            borderRadius: 4,
+            transition: 'width 0.4s ease, background 0.4s ease',
+          }}
+        />
+      </div>
+
+      {/* Value */}
+      <span style={{ minWidth: 44, textAlign: 'right', fontSize: 10 }}>
+        {formatBytes(allocated)}
+      </span>
+
+      {/* Clear cache button */}
+      <button
+        onClick={handleClear}
+        disabled={clearing}
+        title="Clear ML framework memory cache"
+        style={{
+          background: 'none',
+          border: '1px solid var(--border)',
+          borderRadius: 4,
+          color: 'var(--muted-foreground)',
+          cursor: clearing ? 'default' : 'pointer',
+          fontSize: 9,
+          padding: '1px 6px',
+          opacity: clearing ? 0.5 : 1,
+          transition: 'background 0.15s, color 0.15s',
+          fontFamily: 'monospace',
+        }}
+        onMouseEnter={(e) => {
+          if (!clearing) {
+            (e.currentTarget as HTMLElement).style.background = 'var(--accent)';
+            (e.currentTarget as HTMLElement).style.color = 'var(--foreground)';
+          }
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLElement).style.background = 'none';
+          (e.currentTarget as HTMLElement).style.color = 'var(--muted-foreground)';
+        }}
+      >
+        {clearing ? '…' : 'clear'}
+      </button>
+    </div>
+  );
+}
+
+// ── App ───────────────────────────────────────────────────────────────────────
+
+export default function App() {
+  const { init
+```
+
+
+## License: MIT
+https://github.com/mrozilla/gatsby-starter-apollo-lambda/blob/020e1f794e59449ebb432f53cfdb96522fee49cb/src/pages/app.js
+
+```
+The file editing and terminal tools aren't currently enabled. I can provide the complete code for each change so you can apply them. Here's everything needed:
+
+---
+
+**1. Create `python/server/routes/system_routes.py`** (new file):
+
+```python
+"""
+System-level REST routes: memory reporting and cache clearing.
+
+Framework-agnostic — probes backends in priority order:
+  1. torch.mps  (Apple Silicon)
+  2. torch.cuda (NVIDIA)
+  3. Falls back to 0 / no-op if no framework is available
+"""
+from __future__ import annotations
+
+from typing import Any, Dict
+
+from fastapi import APIRouter
+
+router = APIRouter()
+
+
+def _get_allocated_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_allocated()
+    except Exception:
+        pass
+    return 0
+
+
+def _get_reserved_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_reserved()
+    except Exception:
+        pass
+    return 0
+
+
+def _clear_cache() -> str:
+    cleared = []
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
+            cleared.append("mps")
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            cleared.append("cuda")
+    except Exception as exc:
+        return f"error: {exc}"
+    return f"cleared: {', '.join(cleared)}" if cleared else "no cache to clear"
+
+
+@router.get("/system/memory")
+async def get_memory() -> Dict[str, Any]:
+    return {
+        "allocatedBytes": _get_allocated_bytes(),
+        "reservedBytes": _get_reserved_bytes(),
+    }
+
+
+@router.post("/system/clear-cache")
+async def clear_cache() -> Dict[str, Any]:
+    result = _clear_cache()
+    allocated = _get_allocated_bytes()
+    print(f"[system] clear-cache — {result}", flush=True)
+    return {"ok": True, "result": result, "allocatedBytes": allocated}
+```
+
+---
+
+**2. Add to `python/server/main.py`** — In the `app.include_router` section, add one line after the existing router include:
+
+```python
+from nodegraph.python.server.routes.system_routes import router as system_router
+# ...
+app.include_router(router, prefix="/api")
+app.include_router(system_router, prefix="/api")   # ← add this line
+```
+
+---
+
+**3. Add to `typescript/ui/src/api/graphClient.ts`** — before the closing `};`:
+
+```typescript
+  /** Get current ML-framework memory usage. */
+  getMemory(): Promise<{ allocatedBytes: number; reservedBytes: number }> {
+    return api.get('/system/memory').then((r) => r.data);
+  },
+
+  /** Flush ML-framework GPU/MPS caches. */
+  clearCache(): Promise<{ ok: boolean; result: string; allocatedBytes: number }> {
+    return api.post('/system/clear-cache').then((r) => r.data);
+  },
+```
+
+---
+
+**4. Replace the full `typescript/ui/src/App.tsx`** — add a `MemoryMeter` component and wire it into the header. Here's the complete content:
+
+```tsx
+import React, { useEffect, useRef, useState } from 'react';
+import { SplitManager } from './components/canvas/SplitManager';
+import { useGraphStore } from './store/graphStore';
+import { useTraceSocket } from './hooks/useTraceSocket';
+import { useTraceStore } from './store/traceStore';
+import { graphClient } from './api/graphClient';
+import { Button } from './components/ui/button';
+import { ThemeToggle } from './components/ThemeToggle';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { WorkflowSquare10Icon, PlayIcon, PauseIcon } from '@hugeicons/core-free-icons';
+import { StatusBar } from './components/StatusBar';
+
+// ── Memory meter ─────────────────────────────────────────────────────────────
+
+const POLL_MS = 2000;
+const METER_MAX_GB = 8; // upper end of the visual bar scale
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function MemoryMeter() {
+  const [allocated, setAllocated] = useState(0);
+  const [clearing, setClearing] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const poll = () => {
+      graphClient.getMemory().then(({ allocatedBytes }) => {
+        if (!cancelled) setAllocated(allocatedBytes);
+      }).catch(() => {});
+    };
+    poll();
+    const id = setInterval(poll, POLL_MS);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
+
+  const handleClear = async () => {
+    setClearing(true);
+    try {
+      const { allocatedBytes } = await graphClient.clearCache();
+      setAllocated(allocatedBytes);
+    } catch (_) {/* ignore */} finally {
+      setClearing(false);
+    }
+  };
+
+  const pct = Math.min(1, allocated / (METER_MAX_GB * 1024 * 1024 * 1024));
+  const barColor = pct > 0.85 ? '#f38ba8' : pct > 0.6 ? '#fab387' : '#a6e3a1';
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        fontSize: 10,
+        fontFamily: 'monospace',
+        color: 'var(--muted-foreground)',
+        userSelect: 'none',
+      }}
+    >
+      {/* Label */}
+      <span style={{ color: 'var(--muted-foreground)', opacity: 0.7, fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        VRAM
+      </span>
+
+      {/* Bar */}
+      <div
+        title={`Allocated: ${formatBytes(allocated)}`}
+        style={{
+          width: 64,
+          height: 8,
+          borderRadius: 4,
+          background: 'var(--border)',
+          overflow: 'hidden',
+          position: 'relative',
+          cursor: 'default',
+        }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: `${pct * 100}%`,
+            background: barColor,
+            borderRadius: 4,
+            transition: 'width 0.4s ease, background 0.4s ease',
+          }}
+        />
+      </div>
+
+      {/* Value */}
+      <span style={{ minWidth: 44, textAlign: 'right', fontSize: 10 }}>
+        {formatBytes(allocated)}
+      </span>
+
+      {/* Clear cache button */}
+      <button
+        onClick={handleClear}
+        disabled={clearing}
+        title="Clear ML framework memory cache"
+        style={{
+          background: 'none',
+          border: '1px solid var(--border)',
+          borderRadius: 4,
+          color: 'var(--muted-foreground)',
+          cursor: clearing ? 'default' : 'pointer',
+          fontSize: 9,
+          padding: '1px 6px',
+          opacity: clearing ? 0.5 : 1,
+          transition: 'background 0.15s, color 0.15s',
+          fontFamily: 'monospace',
+        }}
+        onMouseEnter={(e) => {
+          if (!clearing) {
+            (e.currentTarget as HTMLElement).style.background = 'var(--accent)';
+            (e.currentTarget as HTMLElement).style.color = 'var(--foreground)';
+          }
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLElement).style.background = 'none';
+          (e.currentTarget as HTMLElement).style.color = 'var(--muted-foreground)';
+        }}
+      >
+        {clearing ? '…' : 'clear'}
+      </button>
+    </div>
+  );
+}
+
+// ── App ───────────────────────────────────────────────────────────────────────
+
+export default function App() {
+  const { init
+```
+
+
+## License: GPL-3.0
+https://github.com/stephnr/super-node-starter/blob/6ed3d608f9faae27ecc14f157e6c82e7cfe5c980/src/models/common.ts
+
+```
+The file editing and terminal tools aren't currently enabled. I can provide the complete code for each change so you can apply them. Here's everything needed:
+
+---
+
+**1. Create `python/server/routes/system_routes.py`** (new file):
+
+```python
+"""
+System-level REST routes: memory reporting and cache clearing.
+
+Framework-agnostic — probes backends in priority order:
+  1. torch.mps  (Apple Silicon)
+  2. torch.cuda (NVIDIA)
+  3. Falls back to 0 / no-op if no framework is available
+"""
+from __future__ import annotations
+
+from typing import Any, Dict
+
+from fastapi import APIRouter
+
+router = APIRouter()
+
+
+def _get_allocated_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_allocated()
+    except Exception:
+        pass
+    return 0
+
+
+def _get_reserved_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_reserved()
+    except Exception:
+        pass
+    return 0
+
+
+def _clear_cache() -> str:
+    cleared = []
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
+            cleared.append("mps")
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            cleared.append("cuda")
+    except Exception as exc:
+        return f"error: {exc}"
+    return f"cleared: {', '.join(cleared)}" if cleared else "no cache to clear"
+
+
+@router.get("/system/memory")
+async def get_memory() -> Dict[str, Any]:
+    return {
+        "allocatedBytes": _get_allocated_bytes(),
+        "reservedBytes": _get_reserved_bytes(),
+    }
+
+
+@router.post("/system/clear-cache")
+async def clear_cache() -> Dict[str, Any]:
+    result = _clear_cache()
+    allocated = _get_allocated_bytes()
+    print(f"[system] clear-cache — {result}", flush=True)
+    return {"ok": True, "result": result, "allocatedBytes": allocated}
+```
+
+---
+
+**2. Add to `python/server/main.py`** — In the `app.include_router` section, add one line after the existing router include:
+
+```python
+from nodegraph.python.server.routes.system_routes import router as system_router
+# ...
+app.include_router(router, prefix="/api")
+app.include_router(system_router, prefix="/api")   # ← add this line
+```
+
+---
+
+**3. Add to `typescript/ui/src/api/graphClient.ts`** — before the closing `};`:
+
+```typescript
+  /** Get current ML-framework memory usage. */
+  getMemory(): Promise<{ allocatedBytes: number; reservedBytes: number }> {
+    return api.get('/system/memory').then((r) => r.data);
+  },
+
+  /** Flush ML-framework GPU/MPS caches. */
+  clearCache(): Promise<{ ok: boolean; result: string; allocatedBytes: number }> {
+    return api.post('/system/clear-cache').then((r) => r.data);
+  },
+```
+
+---
+
+**4. Replace the full `typescript/ui/src/App.tsx`** — add a `MemoryMeter` component and wire it into the header. Here's the complete content:
+
+```tsx
+import React, { useEffect, useRef, useState } from 'react';
+import { SplitManager } from './components/canvas/SplitManager';
+import { useGraphStore } from './store/graphStore';
+import { useTraceSocket } from './hooks/useTraceSocket';
+import { useTraceStore } from './store/traceStore';
+import { graphClient } from './api/graphClient';
+import { Button } from './components/ui/button';
+import { ThemeToggle } from './components/ThemeToggle';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { WorkflowSquare10Icon, PlayIcon, PauseIcon } from '@hugeicons/core-free-icons';
+import { StatusBar } from './components/StatusBar';
+
+// ── Memory meter ─────────────────────────────────────────────────────────────
+
+const POLL_MS = 2000;
+const METER_MAX_GB = 8; // upper end of the visual bar scale
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function MemoryMeter() {
+  const [allocated, setAllocated] = useState(0);
+  const [clearing, setClearing] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const poll = () => {
+      graphClient.getMemory().then(({ allocatedBytes }) => {
+        if (!cancelled) setAllocated(allocatedBytes);
+      }).catch(() => {});
+    };
+    poll();
+    const id = setInterval(poll, POLL_MS);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
+
+  const handleClear = async () => {
+    setClearing(true);
+    try {
+      const { allocatedBytes } = await graphClient.clearCache();
+      setAllocated(allocatedBytes);
+    } catch (_) {/* ignore */} finally {
+      setClearing(false);
+    }
+  };
+
+  const pct = Math.min(1, allocated / (METER_MAX_GB * 1024 * 1024 * 1024));
+  const barColor = pct > 0.85 ? '#f38ba8' : pct > 0.6 ? '#fab387' : '#a6e3a1';
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        fontSize: 10,
+        fontFamily: 'monospace',
+        color: 'var(--muted-foreground)',
+        userSelect: 'none',
+      }}
+    >
+      {/* Label */}
+      <span style={{ color: 'var(--muted-foreground)', opacity: 0.7, fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        VRAM
+      </span>
+
+      {/* Bar */}
+      <div
+        title={`Allocated: ${formatBytes(allocated)}`}
+        style={{
+          width: 64,
+          height: 8,
+          borderRadius: 4,
+          background: 'var(--border)',
+          overflow: 'hidden',
+          position: 'relative',
+          cursor: 'default',
+        }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: `${pct * 100}%`,
+            background: barColor,
+            borderRadius: 4,
+            transition: 'width 0.4s ease, background 0.4s ease',
+          }}
+        />
+      </div>
+
+      {/* Value */}
+      <span style={{ minWidth: 44, textAlign: 'right', fontSize: 10 }}>
+        {formatBytes(allocated)}
+      </span>
+
+      {/* Clear cache button */}
+      <button
+        onClick={handleClear}
+        disabled={clearing}
+        title="Clear ML framework memory cache"
+        style={{
+          background: 'none',
+          border: '1px solid var(--border)',
+          borderRadius: 4,
+          color: 'var(--muted-foreground)',
+          cursor: clearing ? 'default' : 'pointer',
+          fontSize: 9,
+          padding: '1px 6px',
+          opacity: clearing ? 0.5 : 1,
+          transition: 'background 0.15s, color 0.15s',
+          fontFamily: 'monospace',
+        }}
+        onMouseEnter={(e) => {
+          if (!clearing) {
+            (e.currentTarget as HTMLElement).style.background = 'var(--accent)';
+            (e.currentTarget as HTMLElement).style.color = 'var(--foreground)';
+          }
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLElement).style.background = 'none';
+          (e.currentTarget as HTMLElement).style.color = 'var(--muted-foreground)';
+        }}
+      >
+        {clearing ? '…' : 'clear'}
+      </button>
+    </div>
+  );
+}
+
+// ── App ───────────────────────────────────────────────────────────────────────
+
+export default function App() {
+  const { init
+```
+
+
+## License: MIT
+https://github.com/mrozilla/mrozilla.cz/blob/b3fa715b7759650406316124387f6aaf29d0eb1b/src/components/interactive/TextAreaInput.js
+
+```
+The file editing and terminal tools aren't currently enabled. I can provide the complete code for each change so you can apply them. Here's everything needed:
+
+---
+
+**1. Create `python/server/routes/system_routes.py`** (new file):
+
+```python
+"""
+System-level REST routes: memory reporting and cache clearing.
+
+Framework-agnostic — probes backends in priority order:
+  1. torch.mps  (Apple Silicon)
+  2. torch.cuda (NVIDIA)
+  3. Falls back to 0 / no-op if no framework is available
+"""
+from __future__ import annotations
+
+from typing import Any, Dict
+
+from fastapi import APIRouter
+
+router = APIRouter()
+
+
+def _get_allocated_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_allocated()
+    except Exception:
+        pass
+    return 0
+
+
+def _get_reserved_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_reserved()
+    except Exception:
+        pass
+    return 0
+
+
+def _clear_cache() -> str:
+    cleared = []
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
+            cleared.append("mps")
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            cleared.append("cuda")
+    except Exception as exc:
+        return f"error: {exc}"
+    return f"cleared: {', '.join(cleared)}" if cleared else "no cache to clear"
+
+
+@router.get("/system/memory")
+async def get_memory() -> Dict[str, Any]:
+    return {
+        "allocatedBytes": _get_allocated_bytes(),
+        "reservedBytes": _get_reserved_bytes(),
+    }
+
+
+@router.post("/system/clear-cache")
+async def clear_cache() -> Dict[str, Any]:
+    result = _clear_cache()
+    allocated = _get_allocated_bytes()
+    print(f"[system] clear-cache — {result}", flush=True)
+    return {"ok": True, "result": result, "allocatedBytes": allocated}
+```
+
+---
+
+**2. Add to `python/server/main.py`** — In the `app.include_router` section, add one line after the existing router include:
+
+```python
+from nodegraph.python.server.routes.system_routes import router as system_router
+# ...
+app.include_router(router, prefix="/api")
+app.include_router(system_router, prefix="/api")   # ← add this line
+```
+
+---
+
+**3. Add to `typescript/ui/src/api/graphClient.ts`** — before the closing `};`:
+
+```typescript
+  /** Get current ML-framework memory usage. */
+  getMemory(): Promise<{ allocatedBytes: number; reservedBytes: number }> {
+    return api.get('/system/memory').then((r) => r.data);
+  },
+
+  /** Flush ML-framework GPU/MPS caches. */
+  clearCache(): Promise<{ ok: boolean; result: string; allocatedBytes: number }> {
+    return api.post('/system/clear-cache').then((r) => r.data);
+  },
+```
+
+---
+
+**4. Replace the full `typescript/ui/src/App.tsx`** — add a `MemoryMeter` component and wire it into the header. Here's the complete content:
+
+```tsx
+import React, { useEffect, useRef, useState } from 'react';
+import { SplitManager } from './components/canvas/SplitManager';
+import { useGraphStore } from './store/graphStore';
+import { useTraceSocket } from './hooks/useTraceSocket';
+import { useTraceStore } from './store/traceStore';
+import { graphClient } from './api/graphClient';
+import { Button } from './components/ui/button';
+import { ThemeToggle } from './components/ThemeToggle';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { WorkflowSquare10Icon, PlayIcon, PauseIcon } from '@hugeicons/core-free-icons';
+import { StatusBar } from './components/StatusBar';
+
+// ── Memory meter ─────────────────────────────────────────────────────────────
+
+const POLL_MS = 2000;
+const METER_MAX_GB = 8; // upper end of the visual bar scale
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function MemoryMeter() {
+  const [allocated, setAllocated] = useState(0);
+  const [clearing, setClearing] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const poll = () => {
+      graphClient.getMemory().then(({ allocatedBytes }) => {
+        if (!cancelled) setAllocated(allocatedBytes);
+      }).catch(() => {});
+    };
+    poll();
+    const id = setInterval(poll, POLL_MS);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
+
+  const handleClear = async () => {
+    setClearing(true);
+    try {
+      const { allocatedBytes } = await graphClient.clearCache();
+      setAllocated(allocatedBytes);
+    } catch (_) {/* ignore */} finally {
+      setClearing(false);
+    }
+  };
+
+  const pct = Math.min(1, allocated / (METER_MAX_GB * 1024 * 1024 * 1024));
+  const barColor = pct > 0.85 ? '#f38ba8' : pct > 0.6 ? '#fab387' : '#a6e3a1';
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        fontSize: 10,
+        fontFamily: 'monospace',
+        color: 'var(--muted-foreground)',
+        userSelect: 'none',
+      }}
+    >
+      {/* Label */}
+      <span style={{ color: 'var(--muted-foreground)', opacity: 0.7, fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        VRAM
+      </span>
+
+      {/* Bar */}
+      <div
+        title={`Allocated: ${formatBytes(allocated)}`}
+        style={{
+          width: 64,
+          height: 8,
+          borderRadius: 4,
+          background: 'var(--border)',
+          overflow: 'hidden',
+          position: 'relative',
+          cursor: 'default',
+        }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: `${pct * 100}%`,
+            background: barColor,
+            borderRadius: 4,
+            transition: 'width 0.4s ease, background 0.4s ease',
+          }}
+        />
+      </div>
+
+      {/* Value */}
+      <span style={{ minWidth: 44, textAlign: 'right', fontSize: 10 }}>
+        {formatBytes(allocated)}
+      </span>
+
+      {/* Clear cache button */}
+      <button
+        onClick={handleClear}
+        disabled={clearing}
+        title="Clear ML framework memory cache"
+        style={{
+          background: 'none',
+          border: '1px solid var(--border)',
+          borderRadius: 4,
+          color: 'var(--muted-foreground)',
+          cursor: clearing ? 'default' : 'pointer',
+          fontSize: 9,
+          padding: '1px 6px',
+          opacity: clearing ? 0.5 : 1,
+          transition: 'background 0.15s, color 0.15s',
+          fontFamily: 'monospace',
+        }}
+        onMouseEnter={(e) => {
+          if (!clearing) {
+            (e.currentTarget as HTMLElement).style.background = 'var(--accent)';
+            (e.currentTarget as HTMLElement).style.color = 'var(--foreground)';
+          }
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLElement).style.background = 'none';
+          (e.currentTarget as HTMLElement).style.color = 'var(--muted-foreground)';
+        }}
+      >
+        {clearing ? '…' : 'clear'}
+      </button>
+    </div>
+  );
+}
+
+// ── App ───────────────────────────────────────────────────────────────────────
+
+export default function App() {
+  const { init
+```
+
+
+## License: MIT
+https://github.com/mrozilla/gatsby-starter-apollo-lambda/blob/020e1f794e59449ebb432f53cfdb96522fee49cb/src/pages/app.js
+
+```
+The file editing and terminal tools aren't currently enabled. I can provide the complete code for each change so you can apply them. Here's everything needed:
+
+---
+
+**1. Create `python/server/routes/system_routes.py`** (new file):
+
+```python
+"""
+System-level REST routes: memory reporting and cache clearing.
+
+Framework-agnostic — probes backends in priority order:
+  1. torch.mps  (Apple Silicon)
+  2. torch.cuda (NVIDIA)
+  3. Falls back to 0 / no-op if no framework is available
+"""
+from __future__ import annotations
+
+from typing import Any, Dict
+
+from fastapi import APIRouter
+
+router = APIRouter()
+
+
+def _get_allocated_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_allocated()
+    except Exception:
+        pass
+    return 0
+
+
+def _get_reserved_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_reserved()
+    except Exception:
+        pass
+    return 0
+
+
+def _clear_cache() -> str:
+    cleared = []
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
+            cleared.append("mps")
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            cleared.append("cuda")
+    except Exception as exc:
+        return f"error: {exc}"
+    return f"cleared: {', '.join(cleared)}" if cleared else "no cache to clear"
+
+
+@router.get("/system/memory")
+async def get_memory() -> Dict[str, Any]:
+    return {
+        "allocatedBytes": _get_allocated_bytes(),
+        "reservedBytes": _get_reserved_bytes(),
+    }
+
+
+@router.post("/system/clear-cache")
+async def clear_cache() -> Dict[str, Any]:
+    result = _clear_cache()
+    allocated = _get_allocated_bytes()
+    print(f"[system] clear-cache — {result}", flush=True)
+    return {"ok": True, "result": result, "allocatedBytes": allocated}
+```
+
+---
+
+**2. Add to `python/server/main.py`** — In the `app.include_router` section, add one line after the existing router include:
+
+```python
+from nodegraph.python.server.routes.system_routes import router as system_router
+# ...
+app.include_router(router, prefix="/api")
+app.include_router(system_router, prefix="/api")   # ← add this line
+```
+
+---
+
+**3. Add to `typescript/ui/src/api/graphClient.ts`** — before the closing `};`:
+
+```typescript
+  /** Get current ML-framework memory usage. */
+  getMemory(): Promise<{ allocatedBytes: number; reservedBytes: number }> {
+    return api.get('/system/memory').then((r) => r.data);
+  },
+
+  /** Flush ML-framework GPU/MPS caches. */
+  clearCache(): Promise<{ ok: boolean; result: string; allocatedBytes: number }> {
+    return api.post('/system/clear-cache').then((r) => r.data);
+  },
+```
+
+---
+
+**4. Replace the full `typescript/ui/src/App.tsx`** — add a `MemoryMeter` component and wire it into the header. Here's the complete content:
+
+```tsx
+import React, { useEffect, useRef, useState } from 'react';
+import { SplitManager } from './components/canvas/SplitManager';
+import { useGraphStore } from './store/graphStore';
+import { useTraceSocket } from './hooks/useTraceSocket';
+import { useTraceStore } from './store/traceStore';
+import { graphClient } from './api/graphClient';
+import { Button } from './components/ui/button';
+import { ThemeToggle } from './components/ThemeToggle';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { WorkflowSquare10Icon, PlayIcon, PauseIcon } from '@hugeicons/core-free-icons';
+import { StatusBar } from './components/StatusBar';
+
+// ── Memory meter ─────────────────────────────────────────────────────────────
+
+const POLL_MS = 2000;
+const METER_MAX_GB = 8; // upper end of the visual bar scale
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function MemoryMeter() {
+  const [allocated, setAllocated] = useState(0);
+  const [clearing, setClearing] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const poll = () => {
+      graphClient.getMemory().then(({ allocatedBytes }) => {
+        if (!cancelled) setAllocated(allocatedBytes);
+      }).catch(() => {});
+    };
+    poll();
+    const id = setInterval(poll, POLL_MS);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
+
+  const handleClear = async () => {
+    setClearing(true);
+    try {
+      const { allocatedBytes } = await graphClient.clearCache();
+      setAllocated(allocatedBytes);
+    } catch (_) {/* ignore */} finally {
+      setClearing(false);
+    }
+  };
+
+  const pct = Math.min(1, allocated / (METER_MAX_GB * 1024 * 1024 * 1024));
+  const barColor = pct > 0.85 ? '#f38ba8' : pct > 0.6 ? '#fab387' : '#a6e3a1';
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        fontSize: 10,
+        fontFamily: 'monospace',
+        color: 'var(--muted-foreground)',
+        userSelect: 'none',
+      }}
+    >
+      {/* Label */}
+      <span style={{ color: 'var(--muted-foreground)', opacity: 0.7, fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        VRAM
+      </span>
+
+      {/* Bar */}
+      <div
+        title={`Allocated: ${formatBytes(allocated)}`}
+        style={{
+          width: 64,
+          height: 8,
+          borderRadius: 4,
+          background: 'var(--border)',
+          overflow: 'hidden',
+          position: 'relative',
+          cursor: 'default',
+        }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: `${pct * 100}%`,
+            background: barColor,
+            borderRadius: 4,
+            transition: 'width 0.4s ease, background 0.4s ease',
+          }}
+        />
+      </div>
+
+      {/* Value */}
+      <span style={{ minWidth: 44, textAlign: 'right', fontSize: 10 }}>
+        {formatBytes(allocated)}
+      </span>
+
+      {/* Clear cache button */}
+      <button
+        onClick={handleClear}
+        disabled={clearing}
+        title="Clear ML framework memory cache"
+        style={{
+          background: 'none',
+          border: '1px solid var(--border)',
+          borderRadius: 4,
+          color: 'var(--muted-foreground)',
+          cursor: clearing ? 'default' : 'pointer',
+          fontSize: 9,
+          padding: '1px 6px',
+          opacity: clearing ? 0.5 : 1,
+          transition: 'background 0.15s, color 0.15s',
+          fontFamily: 'monospace',
+        }}
+        onMouseEnter={(e) => {
+          if (!clearing) {
+            (e.currentTarget as HTMLElement).style.background = 'var(--accent)';
+            (e.currentTarget as HTMLElement).style.color = 'var(--foreground)';
+          }
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLElement).style.background = 'none';
+          (e.currentTarget as HTMLElement).style.color = 'var(--muted-foreground)';
+        }}
+      >
+        {clearing ? '…' : 'clear'}
+      </button>
+    </div>
+  );
+}
+
+// ── App ───────────────────────────────────────────────────────────────────────
+
+export default function App() {
+  const { init
+```
+
+
+## License: GPL-3.0
+https://github.com/stephnr/super-node-starter/blob/6ed3d608f9faae27ecc14f157e6c82e7cfe5c980/src/models/common.ts
+
+```
+The file editing and terminal tools aren't currently enabled. I can provide the complete code for each change so you can apply them. Here's everything needed:
+
+---
+
+**1. Create `python/server/routes/system_routes.py`** (new file):
+
+```python
+"""
+System-level REST routes: memory reporting and cache clearing.
+
+Framework-agnostic — probes backends in priority order:
+  1. torch.mps  (Apple Silicon)
+  2. torch.cuda (NVIDIA)
+  3. Falls back to 0 / no-op if no framework is available
+"""
+from __future__ import annotations
+
+from typing import Any, Dict
+
+from fastapi import APIRouter
+
+router = APIRouter()
+
+
+def _get_allocated_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_allocated()
+    except Exception:
+        pass
+    return 0
+
+
+def _get_reserved_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_reserved()
+    except Exception:
+        pass
+    return 0
+
+
+def _clear_cache() -> str:
+    cleared = []
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
+            cleared.append("mps")
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            cleared.append("cuda")
+    except Exception as exc:
+        return f"error: {exc}"
+    return f"cleared: {', '.join(cleared)}" if cleared else "no cache to clear"
+
+
+@router.get("/system/memory")
+async def get_memory() -> Dict[str, Any]:
+    return {
+        "allocatedBytes": _get_allocated_bytes(),
+        "reservedBytes": _get_reserved_bytes(),
+    }
+
+
+@router.post("/system/clear-cache")
+async def clear_cache() -> Dict[str, Any]:
+    result = _clear_cache()
+    allocated = _get_allocated_bytes()
+    print(f"[system] clear-cache — {result}", flush=True)
+    return {"ok": True, "result": result, "allocatedBytes": allocated}
+```
+
+---
+
+**2. Add to `python/server/main.py`** — In the `app.include_router` section, add one line after the existing router include:
+
+```python
+from nodegraph.python.server.routes.system_routes import router as system_router
+# ...
+app.include_router(router, prefix="/api")
+app.include_router(system_router, prefix="/api")   # ← add this line
+```
+
+---
+
+**3. Add to `typescript/ui/src/api/graphClient.ts`** — before the closing `};`:
+
+```typescript
+  /** Get current ML-framework memory usage. */
+  getMemory(): Promise<{ allocatedBytes: number; reservedBytes: number }> {
+    return api.get('/system/memory').then((r) => r.data);
+  },
+
+  /** Flush ML-framework GPU/MPS caches. */
+  clearCache(): Promise<{ ok: boolean; result: string; allocatedBytes: number }> {
+    return api.post('/system/clear-cache').then((r) => r.data);
+  },
+```
+
+---
+
+**4. Replace the full `typescript/ui/src/App.tsx`** — add a `MemoryMeter` component and wire it into the header. Here's the complete content:
+
+```tsx
+import React, { useEffect, useRef, useState } from 'react';
+import { SplitManager } from './components/canvas/SplitManager';
+import { useGraphStore } from './store/graphStore';
+import { useTraceSocket } from './hooks/useTraceSocket';
+import { useTraceStore } from './store/traceStore';
+import { graphClient } from './api/graphClient';
+import { Button } from './components/ui/button';
+import { ThemeToggle } from './components/ThemeToggle';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { WorkflowSquare10Icon, PlayIcon, PauseIcon } from '@hugeicons/core-free-icons';
+import { StatusBar } from './components/StatusBar';
+
+// ── Memory meter ─────────────────────────────────────────────────────────────
+
+const POLL_MS = 2000;
+const METER_MAX_GB = 8; // upper end of the visual bar scale
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function MemoryMeter() {
+  const [allocated, setAllocated] = useState(0);
+  const [clearing, setClearing] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const poll = () => {
+      graphClient.getMemory().then(({ allocatedBytes }) => {
+        if (!cancelled) setAllocated(allocatedBytes);
+      }).catch(() => {});
+    };
+    poll();
+    const id = setInterval(poll, POLL_MS);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
+
+  const handleClear = async () => {
+    setClearing(true);
+    try {
+      const { allocatedBytes } = await graphClient.clearCache();
+      setAllocated(allocatedBytes);
+    } catch (_) {/* ignore */} finally {
+      setClearing(false);
+    }
+  };
+
+  const pct = Math.min(1, allocated / (METER_MAX_GB * 1024 * 1024 * 1024));
+  const barColor = pct > 0.85 ? '#f38ba8' : pct > 0.6 ? '#fab387' : '#a6e3a1';
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        fontSize: 10,
+        fontFamily: 'monospace',
+        color: 'var(--muted-foreground)',
+        userSelect: 'none',
+      }}
+    >
+      {/* Label */}
+      <span style={{ color: 'var(--muted-foreground)', opacity: 0.7, fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        VRAM
+      </span>
+
+      {/* Bar */}
+      <div
+        title={`Allocated: ${formatBytes(allocated)}`}
+        style={{
+          width: 64,
+          height: 8,
+          borderRadius: 4,
+          background: 'var(--border)',
+          overflow: 'hidden',
+          position: 'relative',
+          cursor: 'default',
+        }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: `${pct * 100}%`,
+            background: barColor,
+            borderRadius: 4,
+            transition: 'width 0.4s ease, background 0.4s ease',
+          }}
+        />
+      </div>
+
+      {/* Value */}
+      <span style={{ minWidth: 44, textAlign: 'right', fontSize: 10 }}>
+        {formatBytes(allocated)}
+      </span>
+
+      {/* Clear cache button */}
+      <button
+        onClick={handleClear}
+        disabled={clearing}
+        title="Clear ML framework memory cache"
+        style={{
+          background: 'none',
+          border: '1px solid var(--border)',
+          borderRadius: 4,
+          color: 'var(--muted-foreground)',
+          cursor: clearing ? 'default' : 'pointer',
+          fontSize: 9,
+          padding: '1px 6px',
+          opacity: clearing ? 0.5 : 1,
+          transition: 'background 0.15s, color 0.15s',
+          fontFamily: 'monospace',
+        }}
+        onMouseEnter={(e) => {
+          if (!clearing) {
+            (e.currentTarget as HTMLElement).style.background = 'var(--accent)';
+            (e.currentTarget as HTMLElement).style.color = 'var(--foreground)';
+          }
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLElement).style.background = 'none';
+          (e.currentTarget as HTMLElement).style.color = 'var(--muted-foreground)';
+        }}
+      >
+        {clearing ? '…' : 'clear'}
+      </button>
+    </div>
+  );
+}
+
+// ── App ───────────────────────────────────────────────────────────────────────
+
+export default function App() {
+  const { init
+```
+
+
+## License: MIT
+https://github.com/mrozilla/mrozilla.cz/blob/b3fa715b7759650406316124387f6aaf29d0eb1b/src/components/interactive/TextAreaInput.js
+
+```
+The file editing and terminal tools aren't currently enabled. I can provide the complete code for each change so you can apply them. Here's everything needed:
+
+---
+
+**1. Create `python/server/routes/system_routes.py`** (new file):
+
+```python
+"""
+System-level REST routes: memory reporting and cache clearing.
+
+Framework-agnostic — probes backends in priority order:
+  1. torch.mps  (Apple Silicon)
+  2. torch.cuda (NVIDIA)
+  3. Falls back to 0 / no-op if no framework is available
+"""
+from __future__ import annotations
+
+from typing import Any, Dict
+
+from fastapi import APIRouter
+
+router = APIRouter()
+
+
+def _get_allocated_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_allocated()
+    except Exception:
+        pass
+    return 0
+
+
+def _get_reserved_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_reserved()
+    except Exception:
+        pass
+    return 0
+
+
+def _clear_cache() -> str:
+    cleared = []
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
+            cleared.append("mps")
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            cleared.append("cuda")
+    except Exception as exc:
+        return f"error: {exc}"
+    return f"cleared: {', '.join(cleared)}" if cleared else "no cache to clear"
+
+
+@router.get("/system/memory")
+async def get_memory() -> Dict[str, Any]:
+    return {
+        "allocatedBytes": _get_allocated_bytes(),
+        "reservedBytes": _get_reserved_bytes(),
+    }
+
+
+@router.post("/system/clear-cache")
+async def clear_cache() -> Dict[str, Any]:
+    result = _clear_cache()
+    allocated = _get_allocated_bytes()
+    print(f"[system] clear-cache — {result}", flush=True)
+    return {"ok": True, "result": result, "allocatedBytes": allocated}
+```
+
+---
+
+**2. Add to `python/server/main.py`** — In the `app.include_router` section, add one line after the existing router include:
+
+```python
+from nodegraph.python.server.routes.system_routes import router as system_router
+# ...
+app.include_router(router, prefix="/api")
+app.include_router(system_router, prefix="/api")   # ← add this line
+```
+
+---
+
+**3. Add to `typescript/ui/src/api/graphClient.ts`** — before the closing `};`:
+
+```typescript
+  /** Get current ML-framework memory usage. */
+  getMemory(): Promise<{ allocatedBytes: number; reservedBytes: number }> {
+    return api.get('/system/memory').then((r) => r.data);
+  },
+
+  /** Flush ML-framework GPU/MPS caches. */
+  clearCache(): Promise<{ ok: boolean; result: string; allocatedBytes: number }> {
+    return api.post('/system/clear-cache').then((r) => r.data);
+  },
+```
+
+---
+
+**4. Replace the full `typescript/ui/src/App.tsx`** — add a `MemoryMeter` component and wire it into the header. Here's the complete content:
+
+```tsx
+import React, { useEffect, useRef, useState } from 'react';
+import { SplitManager } from './components/canvas/SplitManager';
+import { useGraphStore } from './store/graphStore';
+import { useTraceSocket } from './hooks/useTraceSocket';
+import { useTraceStore } from './store/traceStore';
+import { graphClient } from './api/graphClient';
+import { Button } from './components/ui/button';
+import { ThemeToggle } from './components/ThemeToggle';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { WorkflowSquare10Icon, PlayIcon, PauseIcon } from '@hugeicons/core-free-icons';
+import { StatusBar } from './components/StatusBar';
+
+// ── Memory meter ─────────────────────────────────────────────────────────────
+
+const POLL_MS = 2000;
+const METER_MAX_GB = 8; // upper end of the visual bar scale
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function MemoryMeter() {
+  const [allocated, setAllocated] = useState(0);
+  const [clearing, setClearing] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const poll = () => {
+      graphClient.getMemory().then(({ allocatedBytes }) => {
+        if (!cancelled) setAllocated(allocatedBytes);
+      }).catch(() => {});
+    };
+    poll();
+    const id = setInterval(poll, POLL_MS);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
+
+  const handleClear = async () => {
+    setClearing(true);
+    try {
+      const { allocatedBytes } = await graphClient.clearCache();
+      setAllocated(allocatedBytes);
+    } catch (_) {/* ignore */} finally {
+      setClearing(false);
+    }
+  };
+
+  const pct = Math.min(1, allocated / (METER_MAX_GB * 1024 * 1024 * 1024));
+  const barColor = pct > 0.85 ? '#f38ba8' : pct > 0.6 ? '#fab387' : '#a6e3a1';
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        fontSize: 10,
+        fontFamily: 'monospace',
+        color: 'var(--muted-foreground)',
+        userSelect: 'none',
+      }}
+    >
+      {/* Label */}
+      <span style={{ color: 'var(--muted-foreground)', opacity: 0.7, fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        VRAM
+      </span>
+
+      {/* Bar */}
+      <div
+        title={`Allocated: ${formatBytes(allocated)}`}
+        style={{
+          width: 64,
+          height: 8,
+          borderRadius: 4,
+          background: 'var(--border)',
+          overflow: 'hidden',
+          position: 'relative',
+          cursor: 'default',
+        }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: `${pct * 100}%`,
+            background: barColor,
+            borderRadius: 4,
+            transition: 'width 0.4s ease, background 0.4s ease',
+          }}
+        />
+      </div>
+
+      {/* Value */}
+      <span style={{ minWidth: 44, textAlign: 'right', fontSize: 10 }}>
+        {formatBytes(allocated)}
+      </span>
+
+      {/* Clear cache button */}
+      <button
+        onClick={handleClear}
+        disabled={clearing}
+        title="Clear ML framework memory cache"
+        style={{
+          background: 'none',
+          border: '1px solid var(--border)',
+          borderRadius: 4,
+          color: 'var(--muted-foreground)',
+          cursor: clearing ? 'default' : 'pointer',
+          fontSize: 9,
+          padding: '1px 6px',
+          opacity: clearing ? 0.5 : 1,
+          transition: 'background 0.15s, color 0.15s',
+          fontFamily: 'monospace',
+        }}
+        onMouseEnter={(e) => {
+          if (!clearing) {
+            (e.currentTarget as HTMLElement).style.background = 'var(--accent)';
+            (e.currentTarget as HTMLElement).style.color = 'var(--foreground)';
+          }
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLElement).style.background = 'none';
+          (e.currentTarget as HTMLElement).style.color = 'var(--muted-foreground)';
+        }}
+      >
+        {clearing ? '…' : 'clear'}
+      </button>
+    </div>
+  );
+}
+
+// ── App ───────────────────────────────────────────────────────────────────────
+
+export default function App() {
+  const { init
+```
+
+
+## License: MIT
+https://github.com/mrozilla/gatsby-starter-apollo-lambda/blob/020e1f794e59449ebb432f53cfdb96522fee49cb/src/pages/app.js
+
+```
+The file editing and terminal tools aren't currently enabled. I can provide the complete code for each change so you can apply them. Here's everything needed:
+
+---
+
+**1. Create `python/server/routes/system_routes.py`** (new file):
+
+```python
+"""
+System-level REST routes: memory reporting and cache clearing.
+
+Framework-agnostic — probes backends in priority order:
+  1. torch.mps  (Apple Silicon)
+  2. torch.cuda (NVIDIA)
+  3. Falls back to 0 / no-op if no framework is available
+"""
+from __future__ import annotations
+
+from typing import Any, Dict
+
+from fastapi import APIRouter
+
+router = APIRouter()
+
+
+def _get_allocated_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_allocated()
+    except Exception:
+        pass
+    return 0
+
+
+def _get_reserved_bytes() -> int:
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            return torch.mps.current_allocated_memory()
+        if torch.cuda.is_available():
+            return torch.cuda.memory_reserved()
+    except Exception:
+        pass
+    return 0
+
+
+def _clear_cache() -> str:
+    cleared = []
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
+            cleared.append("mps")
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            cleared.append("cuda")
+    except Exception as exc:
+        return f"error: {exc}"
+    return f"cleared: {', '.join(cleared)}" if cleared else "no cache to clear"
+
+
+@router.get("/system/memory")
+async def get_memory() -> Dict[str, Any]:
+    return {
+        "allocatedBytes": _get_allocated_bytes(),
+        "reservedBytes": _get_reserved_bytes(),
+    }
+
+
+@router.post("/system/clear-cache")
+async def clear_cache() -> Dict[str, Any]:
+    result = _clear_cache()
+    allocated = _get_allocated_bytes()
+    print(f"[system] clear-cache — {result}", flush=True)
+    return {"ok": True, "result": result, "allocatedBytes": allocated}
+```
+
+---
+
+**2. Add to `python/server/main.py`** — In the `app.include_router` section, add one line after the existing router include:
+
+```python
+from nodegraph.python.server.routes.system_routes import router as system_router
+# ...
+app.include_router(router, prefix="/api")
+app.include_router(system_router, prefix="/api")   # ← add this line
+```
+
+---
+
+**3. Add to `typescript/ui/src/api/graphClient.ts`** — before the closing `};`:
+
+```typescript
+  /** Get current ML-framework memory usage. */
+  getMemory(): Promise<{ allocatedBytes: number; reservedBytes: number }> {
+    return api.get('/system/memory').then((r) => r.data);
+  },
+
+  /** Flush ML-framework GPU/MPS caches. */
+  clearCache(): Promise<{ ok: boolean; result: string; allocatedBytes: number }> {
+    return api.post('/system/clear-cache').then((r) => r.data);
+  },
+```
+
+---
+
+**4. Replace the full `typescript/ui/src/App.tsx`** — add a `MemoryMeter` component and wire it into the header. Here's the complete content:
+
+```tsx
+import React, { useEffect, useRef, useState } from 'react';
+import { SplitManager } from './components/canvas/SplitManager';
+import { useGraphStore } from './store/graphStore';
+import { useTraceSocket } from './hooks/useTraceSocket';
+import { useTraceStore } from './store/traceStore';
+import { graphClient } from './api/graphClient';
+import { Button } from './components/ui/button';
+import { ThemeToggle } from './components/ThemeToggle';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { WorkflowSquare10Icon, PlayIcon, PauseIcon } from '@hugeicons/core-free-icons';
+import { StatusBar } from './components/StatusBar';
+
+// ── Memory meter ─────────────────────────────────────────────────────────────
+
+const POLL_MS = 2000;
+const METER_MAX_GB = 8; // upper end of the visual bar scale
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function MemoryMeter() {
+  const [allocated, setAllocated] = useState(0);
+  const [clearing, setClearing] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const poll = () => {
+      graphClient.getMemory().then(({ allocatedBytes }) => {
+        if (!cancelled) setAllocated(allocatedBytes);
+      }).catch(() => {});
+    };
+    poll();
+    const id = setInterval(poll, POLL_MS);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
+
+  const handleClear = async () => {
+    setClearing(true);
+    try {
+      const { allocatedBytes } = await graphClient.clearCache();
+      setAllocated(allocatedBytes);
+    } catch (_) {/* ignore */} finally {
+      setClearing(false);
+    }
+  };
+
+  const pct = Math.min(1, allocated / (METER_MAX_GB * 1024 * 1024 * 1024));
+  const barColor = pct > 0.85 ? '#f38ba8' : pct > 0.6 ? '#fab387' : '#a6e3a1';
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        fontSize: 10,
+        fontFamily: 'monospace',
+        color: 'var(--muted-foreground)',
+        userSelect: 'none',
+      }}
+    >
+      {/* Label */}
+      <span style={{ color: 'var(--muted-foreground)', opacity: 0.7, fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        VRAM
+      </span>
+
+      {/* Bar */}
+      <div
+        title={`Allocated: ${formatBytes(allocated)}`}
+        style={{
+          width: 64,
+          height: 8,
+          borderRadius: 4,
+          background: 'var(--border)',
+          overflow: 'hidden',
+          position: 'relative',
+          cursor: 'default',
+        }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: `${pct * 100}%`,
+            background: barColor,
+            borderRadius: 4,
+            transition: 'width 0.4s ease, background 0.4s ease',
+          }}
+        />
+      </div>
+
+      {/* Value */}
+      <span style={{ minWidth: 44, textAlign: 'right', fontSize: 10 }}>
+        {formatBytes(allocated)}
+      </span>
+
+      {/* Clear cache button */}
+      <button
+        onClick={handleClear}
+        disabled={clearing}
+        title="Clear ML framework memory cache"
+        style={{
+          background: 'none',
+          border: '1px solid var(--border)',
+          borderRadius: 4,
+          color: 'var(--muted-foreground)',
+          cursor: clearing ? 'default' : 'pointer',
+          fontSize: 9,
+          padding: '1px 6px',
+          opacity: clearing ? 0.5 : 1,
+          transition: 'background 0.15s, color 0.15s',
+          fontFamily: 'monospace',
+        }}
+        onMouseEnter={(e) => {
+          if (!clearing) {
+            (e.currentTarget as HTMLElement).style.background = 'var(--accent)';
+            (e.currentTarget as HTMLElement).style.color = 'var(--foreground)';
+          }
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLElement).style.background = 'none';
+          (e.currentTarget as HTMLElement).style.color = 'var(--muted-foreground)';
+        }}
+      >
+        {clearing ? '…' : 'clear'}
+      </button>
+    </div>
+  );
+}
+
+// ── App ───────────────────────────────────────────────────────────────────────
+
+export default function App() {
+  const { init
+```
+
