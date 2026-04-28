@@ -228,7 +228,7 @@
 .node-header {
   background: var(--node-card-header);
   border-bottom: 1px solid var(--node-card-border);
-  min-height: 43px;
+  min-height: 47px;
 }
 
 @keyframes node-running-pulse {

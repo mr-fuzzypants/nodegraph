@@ -62,12 +62,12 @@ export function EditableNodeTitle({ label, accent, onRename }: EditableNodeTitle
         style={{
           flex: 1,
           minWidth: 0,
-          background: 'rgba(15, 23, 42, 0.78)',
+          background: 'var(--background)',
           border: `1px solid ${accent}88`,
           borderRadius: 6,
           color: 'var(--foreground)',
           fontFamily: 'ui-sans-serif, sans-serif',
-          fontSize: 13,
+          fontSize: 14.3,
           fontWeight: 700,
           padding: '3px 6px',
           outline: 'none',
@@ -85,7 +85,7 @@ export function EditableNodeTitle({ label, accent, onRename }: EditableNodeTitle
       title={`${label} — double-click to rename`}
       style={{
         fontWeight: 700,
-        fontSize: 13,
+        fontSize: 14.3,
         color: 'var(--foreground)',
         flex: 1,
         overflow: 'hidden',

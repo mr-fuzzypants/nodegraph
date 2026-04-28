@@ -160,7 +160,7 @@ function InlinePortEditor({
         border: `1px solid ${hasError ? '#f87171' : 'var(--border)'}`,
         borderRadius: 3,
         color: hasError ? '#f87171' : 'var(--foreground)',
-        fontFamily: 'ui-monospace, monospace',
+        fontFamily: 'ui-sans-serif, sans-serif',
         fontSize: 11,
         padding: '2px 5px',
         width: '100%',
@@ -293,7 +293,7 @@ function HumanInputForm({
           onKeyDown={(e) => {
             if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); submit(); }
           }}
-          className="w-full rounded-md text-xs font-mono p-2 resize-none outline-none"
+          className="w-full rounded-md text-xs font-sans p-2 resize-none outline-none"
           style={{ background: 'var(--background)', border: '1px solid #a78bfa88', color: 'var(--foreground)', lineHeight: 1.5 }}
         />
         <div className="flex items-center justify-between mt-1.5">

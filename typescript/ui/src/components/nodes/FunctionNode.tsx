@@ -12,13 +12,18 @@ import { graphClient } from '../../api/graphClient';
 import { EditableNodeTitle } from './EditableNodeTitle';
 import {
   TRACE_COLORS,
+  CopyPortValueButton,
   StatusBadge,
   PortColumnHeader,
   getNodeVisualState,
+  getPortTypeColor,
+  getPortValueTypeColors,
   headerActionStyle,
+  isMutedLinkedInput,
   nodeAccentRailStyle,
   nodeCardClassName,
   nodeCardStyle,
+  PortHoverBadge,
 } from './nodeVisuals';
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
@@ -42,26 +47,8 @@ const CV = {
 
 // ── Value-type chip ────────────────────────────────────────────────────────────
 
-const CHIP_COLORS: Record<string, [string, string]> = {
-  int:          ['rgba(96, 165, 250, 0.15)', '#93c5fd'],
-  float:        ['rgba(96, 165, 250, 0.15)', '#93c5fd'],
-  number:       ['rgba(96, 165, 250, 0.15)', '#93c5fd'],
-  str:          ['rgba(74, 222, 128, 0.14)', '#86efac'],
-  string:       ['rgba(74, 222, 128, 0.14)', '#86efac'],
-  bool:         ['rgba(250, 204, 21, 0.14)', '#fde047'],
-  any:          ['rgba(148, 163, 184, 0.1)', '#94a3b8'],
-  // Imaging / diffusion types
-  image:        ['rgba(192, 132, 252, 0.14)', '#d8b4fe'],
-  latent:       ['rgba(129, 140, 248, 0.15)', '#a5b4fc'],
-  conditioning: ['rgba(56, 189, 248, 0.14)', '#7dd3fc'],
-  model:        ['rgba(251, 146, 60, 0.14)', '#fdba74'],
-  clip:         ['rgba(52, 211, 153, 0.14)', '#6ee7b7'],
-  vae:          ['rgba(232, 121, 249, 0.14)', '#f0abfc'],
-  mask:         ['rgba(134, 239, 172, 0.12)', '#bbf7d0'],
-};
-
 function ValueChip({ vt }: { vt: string }) {
-  const [bg, fg] = CHIP_COLORS[vt.toLowerCase()] ?? CHIP_COLORS.any;
+  const [bg, fg] = getPortValueTypeColors(vt);
   return (
     <span
       style={{
@@ -73,7 +60,7 @@ function ValueChip({ vt }: { vt: string }) {
         borderRadius: 999,
         letterSpacing: 0.5,
         textTransform: 'uppercase',
-        fontFamily: 'ui-monospace, monospace',
+        fontFamily: 'ui-sans-serif, sans-serif',
         flexShrink: 0,
         lineHeight: 1,
         border: `1px solid ${fg}33`,
@@ -84,42 +71,21 @@ function ValueChip({ vt }: { vt: string }) {
   );
 }
 
-function LinkedChip() {
-  return (
-    <span
-      title="This input is connected and cannot be edited directly"
-      style={{
-        background: 'rgba(148, 163, 184, 0.12)',
-        border: '1px solid rgba(148, 163, 184, 0.35)',
-        borderRadius: 999,
-        color: CV.muted,
-        flexShrink: 0,
-        fontFamily: 'ui-monospace, monospace',
-        fontSize: 9,
-        fontWeight: 700,
-        letterSpacing: 0.5,
-        lineHeight: 1,
-        padding: '2px 7px',
-        textTransform: 'uppercase',
-      }}
-    >
-      linked
-    </span>
-  );
-}
-
 // ── Handle style ───────────────────────────────────────────────────────────────
 
-function mkHandle(port: SerializedPort): React.CSSProperties {
+function mkHandle(port: SerializedPort, side: 'left' | 'right'): React.CSSProperties {
   const ctrl = port.function === 'CONTROL';
-  const col = ctrl ? CTRL_COL : DATA_COL;
+  const mutedLinkedInput = isMutedLinkedInput(port);
+  const col = mutedLinkedInput ? CV.muted : getPortTypeColor(port, DATA_COL, CTRL_COL);
   return {
     width: 12,
     height: 12,
+    top: '50%',
     background: col,
-    border: `2px solid rgba(2, 6, 23, 0.9)`,
+    border: mutedLinkedInput ? `2px solid ${CV.border}` : `2px solid rgba(2, 6, 23, 0.9)`,
     borderRadius: ctrl ? 2 : '50%',
-    transform: ctrl ? 'rotate(45deg)' : undefined,
+    opacity: mutedLinkedInput ? 0.42 : 1,
+    transform: ctrl ? `translate(${side === 'left' ? '-50%' : '50%'}, -50%) rotate(45deg)` : undefined,
   };
 }
 
@@ -235,7 +201,7 @@ function PrimitiveInputEditor({
       }}
       placeholder={vt === 'int' ? '0' : vt === 'float' || vt === 'number' ? '0.0' : 'value'}
       style={{
-        background: 'var(--input)',
+        background: 'var(--background)',
         border: `1px solid ${hasError ? '#f87171' : CV.border}`,
         borderRadius: 5,
         color: hasError ? '#f87171' : CV.text,
@@ -262,6 +228,8 @@ function InputRow({
 }) {
   const [hov, setHov] = useState(false);
   const hasValue = port.value !== null && port.value !== undefined;
+  const portColor = getPortTypeColor(port, DATA_COL, CTRL_COL);
+  const mutedLinkedInput = isMutedLinkedInput(port);
   const canEdit =
     onSetPortValue &&
     port.function === 'DATA' &&
@@ -271,11 +239,12 @@ function InputRow({
   return (
     <div
       style={{
-        background: hov ? CV.portHov : 'transparent',
+        background: !expanded || hov ? CV.portHov : 'transparent',
         opacity: hov ? undefined : undefined,
         transition: 'background 0.1s',
         position: 'relative',
         borderRadius: 10,
+        height: '100%',
       }}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
@@ -290,17 +259,17 @@ function InputRow({
           minHeight: 34,
         }}
       >
-        <Handle type="target" position={Position.Left} id={`in-${port.name}`} style={mkHandle(port)} />
-        <span style={{ color: DATA_COL, fontSize: 9, fontWeight: 700, textTransform: 'uppercase' }}>in</span>
-        <span style={{ fontSize: 12, color: CV.text, flex: 1, fontFamily: 'ui-sans-serif, sans-serif' }}>
+        <Handle type="target" position={Position.Left} id={`in-${port.name}`} style={mkHandle(port, 'left')} />
+        {!expanded && hov && <PortHoverBadge port={port} fallbackColor={DATA_COL} />}
+        {expanded && hov && hasValue && <CopyPortValueButton value={port.value} />}
+        <span style={{ color: mutedLinkedInput ? CV.muted : portColor, fontSize: 9, fontWeight: 700, opacity: mutedLinkedInput ? 0.5 : 1, textTransform: 'uppercase' }}>in</span>
+        <span style={{ fontSize: 12, color: mutedLinkedInput ? CV.muted : CV.text, flex: 1, fontFamily: 'ui-sans-serif, sans-serif', opacity: mutedLinkedInput ? 0.56 : 1 }}>
           {port.name}
         </span>
-        {port.connected ? (
-          <LinkedChip />
-        ) : canEdit ? (
+        {canEdit ? (
           <PrimitiveInputEditor port={port} onCommit={onSetPortValue} />
         ) : null}
-        {(expanded || hov) && <ValueChip vt={port.valueType} />}
+        {expanded && <ValueChip vt={port.valueType} />}
       </div>
       {/* Value panel (shown when expanded) */}
       {expanded && hasValue && (
@@ -315,13 +284,15 @@ function InputRow({
 function OutputRow({ port, expanded }: { port: SerializedPort; expanded: boolean }) {
   const [hov, setHov] = useState(false);
   const hasValue = port.value !== null && port.value !== undefined;
+  const portColor = getPortTypeColor(port, DATA_COL, CTRL_COL);
   return (
     <div
       style={{
-        background: hov ? CV.portHov : 'transparent',
+        background: !expanded || hov ? CV.portHov : 'transparent',
         transition: 'background 0.1s',
         position: 'relative',
         borderRadius: 10,
+        height: '100%',
       }}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
@@ -337,12 +308,14 @@ function OutputRow({ port, expanded }: { port: SerializedPort; expanded: boolean
           minHeight: 34,
         }}
       >
-        {(expanded || hov) && <ValueChip vt={port.valueType} />}
-        <span style={{ color: DATA_COL, fontSize: 9, fontWeight: 700, textTransform: 'uppercase' }}>out</span>
+        {expanded && <ValueChip vt={port.valueType} />}
+        {!expanded && hov && <PortHoverBadge port={port} align="left" fallbackColor={DATA_COL} />}
+        {expanded && hov && hasValue && <CopyPortValueButton value={port.value} align="left" />}
+        <span style={{ color: portColor, fontSize: 9, fontWeight: 700, textTransform: 'uppercase' }}>out</span>
         <span style={{ fontSize: 12, color: CV.text, fontFamily: 'ui-sans-serif, sans-serif', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {port.name}
         </span>
-        <Handle type="source" position={Position.Right} id={`out-${port.name}`} style={mkHandle(port)} />
+        <Handle type="source" position={Position.Right} id={`out-${port.name}`} style={mkHandle(port, 'right')} />
       </div>
       {/* Value panel (shown when expanded) */}
       {expanded && hasValue && (
@@ -511,7 +484,7 @@ function EditableField({
           border: `1px solid ${focused ? DATA_COL : CV.border}`,
           borderRadius: 5,
           fontSize: 11,
-          fontFamily: 'ui-monospace, monospace',
+          fontFamily: 'ui-sans-serif, sans-serif',
           padding: '5px 7px',
           resize: 'vertical',
           outline: 'none',
@@ -645,7 +618,7 @@ function HumanInputPanel({
           background: 'var(--background)', color: CV.text,
           border: `1px solid ${TRACE_GLOW.waiting}88`,
           borderRadius: 5, fontSize: 11,
-          fontFamily: 'ui-monospace, monospace',
+          fontFamily: 'ui-sans-serif, sans-serif',
           padding: '5px 7px', resize: 'none', outline: 'none', lineHeight: 1.5,
         }}
       />
@@ -659,7 +632,7 @@ function HumanInputPanel({
             borderRadius: 5, color: response.trim() && !submitting ? CV.bg : TRACE_GLOW.waiting,
             cursor: response.trim() && !submitting ? 'pointer' : 'default',
             fontSize: 10, padding: '3px 10px',
-            fontFamily: 'ui-monospace, monospace', lineHeight: 1.4,
+            fontFamily: 'ui-sans-serif, sans-serif', lineHeight: 1.4,
             transition: 'background 0.1s, color 0.1s', opacity: submitting ? 0.5 : 1,
           }}
         >
@@ -732,6 +705,7 @@ export function FunctionNode({ id, data, selected }: NodeProps<Node<NodeData>>) 
   const inputs = (data.inputs ?? []) as SerializedPort[];
   const outputs = (data.outputs ?? []) as SerializedPort[];
   const hasPorts = inputs.length > 0 || outputs.length > 0;
+  const portRowCount = Math.max(inputs.length, outputs.length);
 
   // Inline editing panels
   const isConstant       = data.nodeType === 'ConstantNode';
@@ -770,6 +744,7 @@ export function FunctionNode({ id, data, selected }: NodeProps<Node<NodeData>>) 
       }}
       style={{
         ...nodeCardStyle(DATA_COL),
+        minWidth: expanded ? 300 : 375,
         width: '100%',
         height: '100%',
         display: 'flex',
@@ -781,13 +756,13 @@ export function FunctionNode({ id, data, selected }: NodeProps<Node<NodeData>>) 
         <div
           className="node-header"
           style={{
-            padding: '11px 12px 10px',
+            padding: '12px 13px 11px',
             display: 'flex',
             alignItems: 'center',
             gap: 8,
           }}
         >
-          <NodeIcon size={14} color={ACCENT} strokeWidth={2.5} style={{ flexShrink: 0 }} />
+          <NodeIcon size={15.4} color={ACCENT} strokeWidth={2.5} style={{ flexShrink: 0 }} />
           <EditableNodeTitle
             label={data.label as string}
             accent={ACCENT}
@@ -845,22 +820,35 @@ export function FunctionNode({ id, data, selected }: NodeProps<Node<NodeData>>) 
 
         {/* Ports */}
         {hasPorts && (
-          <div style={{ padding: 10, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <div style={{ display: 'grid', gap: 6, minWidth: 0 }}>
+          <div style={{ padding: 10, display: 'grid', gridTemplateColumns: '3fr 2fr', alignItems: 'start', columnGap: 8, rowGap: 6 }}>
+            <div style={{ minWidth: 0 }}>
               <PortColumnHeader label="inputs" count={inputs.length} />
-              {inputs.map((p) => (
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <PortColumnHeader label="outputs" count={outputs.length} align="right" />
+            </div>
+            {Array.from({ length: portRowCount }, (_, index) => {
+              const input = inputs[index];
+              const output = outputs[index];
+              return (
+                <React.Fragment key={`${input?.name ?? 'empty'}-${output?.name ?? 'empty'}-${index}`}>
+                  <div style={{ minWidth: 0, height: '100%' }}>
+                    {input ? (
                 <InputRow
-                  key={p.name}
-                  port={p}
+                        port={input}
                   expanded={expanded}
                   onSetPortValue={(portName, value) => setPortValue(id, portName, value)}
                 />
-              ))}
-            </div>
-            <div style={{ display: 'grid', gap: 6, minWidth: 0 }}>
-              <PortColumnHeader label="outputs" count={outputs.length} align="right" />
-              {outputs.map((p) => <OutputRow key={p.name} port={p} expanded={expanded} />)}
-            </div>
+                    ) : (
+                      <div style={{ minHeight: 34 }} />
+                    )}
+                  </div>
+                  <div style={{ minWidth: 0, height: '100%' }}>
+                    {output ? <OutputRow port={output} expanded={expanded} /> : <div style={{ minHeight: 34 }} />}
+                  </div>
+                </React.Fragment>
+              );
+            })}
           </div>
         )}
 

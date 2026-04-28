@@ -5,13 +5,17 @@ import { PortValueRenderer } from './PortValueRenderer';
 import { graphClient } from '../../api/graphClient';
 import { useTraceStore } from '../../store/traceStore';
 import {
+  CopyPortValueButton,
   StatusBadge,
   PortColumnHeader,
   getNodeVisualState,
+  getPortTypeColor,
   headerActionStyle,
+  isMutedLinkedInput,
   nodeAccentRailStyle,
   nodeCardClassName,
   nodeCardStyle,
+  PortHoverBadge,
 } from './nodeVisuals';
 
 const T = {
@@ -51,15 +55,19 @@ const FALLBACK_VALUE_TYPES = [
 
 let cachedValueTypes: string[] | null = null;
 
-function handleStyle(port: SerializedPort, accent: string): React.CSSProperties {
-  const color = port.function === 'CONTROL' ? T.control : accent;
+function handleStyle(port: SerializedPort, accent: string, side: 'left' | 'right'): React.CSSProperties {
+  const mutedLinkedInput = isMutedLinkedInput(port);
+  const color = mutedLinkedInput ? T.muted : getPortTypeColor(port, accent, T.control);
+  const isControl = port.function === 'CONTROL';
   return {
     width: 12,
     height: 12,
+    top: '50%',
     background: color,
-    border: '2px solid rgba(2, 6, 23, 0.9)',
+    border: mutedLinkedInput ? `2px solid ${T.border}` : '2px solid rgba(2, 6, 23, 0.9)',
     borderRadius: port.function === 'CONTROL' ? 2 : '50%',
-    transform: port.function === 'CONTROL' ? 'rotate(45deg)' : undefined,
+    opacity: mutedLinkedInput ? 0.42 : 1,
+    transform: isControl ? `translate(${side === 'left' ? '-50%' : '50%'}, -50%) rotate(45deg)` : undefined,
   };
 }
 
@@ -73,7 +81,7 @@ function RemoveButton({ onClick, visible }: { onClick: () => void; visible: bool
       }}
       title="Remove port"
       style={{
-        background: 'transparent',
+        background: 'var(--background)',
         border: 'none',
         color: '#ef4444',
         cursor: 'pointer',
@@ -111,6 +119,8 @@ function TunnelPortRow({
   const inputRef = useRef<HTMLInputElement>(null);
   const isInput = mode === 'input';
   const accent = isInput ? T.input : T.output;
+  const portColor = getPortTypeColor(port, accent, T.control);
+  const mutedLinkedInput = isMutedLinkedInput(port);
 
   const beginEdit = () => {
     setEditValue(port.name);
@@ -160,6 +170,7 @@ function TunnelPortRow({
         border: `1px solid ${error ? '#ef4444' : accent}`,
         borderRadius: 5,
         color: T.text,
+        fontFamily: 'ui-sans-serif, sans-serif',
         fontSize: 12,
         padding: '2px 5px',
         outline: 'none',
@@ -172,9 +183,10 @@ function TunnelPortRow({
       style={{
         flex: 1,
         minWidth: 0,
-        color: T.text,
+        color: mutedLinkedInput ? T.muted : T.text,
         cursor: onRename ? 'text' : 'default',
         fontSize: 12,
+        opacity: mutedLinkedInput ? 0.56 : 1,
         overflow: 'hidden',
         textOverflow: 'ellipsis',
         whiteSpace: 'nowrap',
@@ -188,7 +200,7 @@ function TunnelPortRow({
     <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      style={{ position: 'relative', borderRadius: 10, background: hovered ? T.hover : 'transparent' }}
+      style={{ position: 'relative', borderRadius: 10, background: !expanded || hovered ? T.hover : 'transparent' }}
     >
       <div
         style={{
@@ -202,14 +214,18 @@ function TunnelPortRow({
         {isInput ? (
           <>
             {onRemove && <RemoveButton onClick={onRemove} visible={hovered && !editing} />}
-            <span style={{ color: accent, fontSize: 9, fontWeight: 700, textTransform: 'uppercase' }}>in</span>
+            {!expanded && hovered && <PortHoverBadge port={port} align="left" fallbackColor={accent} />}
+            {expanded && hovered && port.value != null && <CopyPortValueButton value={port.value} align="left" />}
+            <span style={{ color: mutedLinkedInput ? T.muted : portColor, fontSize: 9, fontWeight: 700, opacity: mutedLinkedInput ? 0.5 : 1, textTransform: 'uppercase' }}>in</span>
             {name}
-            <Handle type="source" position={Position.Right} id={`out-${port.name}`} style={handleStyle(port, accent)} />
+            <Handle type="source" position={Position.Right} id={`out-${port.name}`} style={handleStyle(port, accent, 'right')} />
           </>
         ) : (
           <>
-            <Handle type="target" position={Position.Left} id={`in-${port.name}`} style={handleStyle(port, accent)} />
-            <span style={{ color: accent, fontSize: 9, fontWeight: 700, textTransform: 'uppercase' }}>out</span>
+            <Handle type="target" position={Position.Left} id={`in-${port.name}`} style={handleStyle(port, accent, 'left')} />
+            {!expanded && hovered && <PortHoverBadge port={port} fallbackColor={accent} />}
+            {expanded && hovered && port.value != null && <CopyPortValueButton value={port.value} />}
+            <span style={{ color: mutedLinkedInput ? T.muted : portColor, fontSize: 9, fontWeight: 700, opacity: mutedLinkedInput ? 0.5 : 1, textTransform: 'uppercase' }}>out</span>
             {name}
             {onRemove && <RemoveButton onClick={onRemove} visible={hovered && !editing} />}
           </>
@@ -280,7 +296,7 @@ function PortEditor({
           value={portFunction}
           onChange={(event) => setPortFunction(event.target.value as 'DATA' | 'CONTROL')}
           onMouseDown={(event) => event.stopPropagation()}
-          style={{ flex: 1, background: 'var(--input)', color: T.text, border: `1px solid ${T.border}`, borderRadius: 5, padding: 4 }}
+          style={{ flex: 1, background: 'var(--background)', color: T.text, border: `1px solid ${T.border}`, borderRadius: 5, fontFamily: 'ui-sans-serif, sans-serif', padding: 4 }}
         >
           <option value="DATA" style={{ background: '#020617', color: '#e2e8f0' }}>data</option>
           <option value="CONTROL" style={{ background: '#020617', color: '#e2e8f0' }}>control</option>
@@ -291,7 +307,7 @@ function PortEditor({
           disabled={portFunction === 'CONTROL'}
           onChange={(event) => setValueType(event.target.value)}
           onMouseDown={(event) => event.stopPropagation()}
-          style={{ flex: 1, background: 'var(--input)', color: T.text, border: `1px solid ${T.border}`, borderRadius: 5, padding: 4 }}
+          style={{ flex: 1, background: 'var(--background)', color: T.text, border: `1px solid ${T.border}`, borderRadius: 5, fontFamily: 'ui-sans-serif, sans-serif', padding: 4 }}
         >
           {valueTypes.map((type) => (
             <option key={type} value={type} style={{ background: '#020617', color: '#e2e8f0' }}>
@@ -311,7 +327,7 @@ function PortEditor({
             if (event.key === 'Enter') submit();
           }}
           placeholder="port name..."
-          style={{ flex: 1, minWidth: 0, background: 'transparent', color: T.text, border: `1px solid ${T.border}`, borderRadius: 5, padding: '4px 7px' }}
+          style={{ flex: 1, minWidth: 0, background: 'var(--background)', color: T.text, border: `1px solid ${T.border}`, borderRadius: 5, fontFamily: 'ui-sans-serif, sans-serif', padding: '4px 7px' }}
         />
         <button
           className="nodrag nopan"
@@ -365,15 +381,15 @@ export function TunnelNodeCard({
       onMouseLeave={() => setCardHovered(false)}
       style={{
         ...nodeCardStyle(accent),
-        minWidth: 240,
+        minWidth: expanded ? 300 : 375,
         opacity: busy ? 0.7 : 1,
       }}
     >
       <div className="node-accent-rail" style={nodeAccentRailStyle(accent, visualState)} />
-      <div className="node-header" style={{ padding: '11px 12px 10px' }}>
+      <div className="node-header" style={{ padding: '12px 13px 11px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ color: accent, fontWeight: 800, fontSize: 12 }}>{mode === 'input' ? 'IN' : 'OUT'}</span>
-          <span style={{ color: T.text, flex: 1, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span style={{ color: accent, fontWeight: 800, fontSize: 13.2 }}>{mode === 'input' ? 'IN' : 'OUT'}</span>
+          <span style={{ color: T.text, flex: 1, fontWeight: 700, fontSize: 14.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {mode === 'input' ? 'Tunnel Inputs' : 'Tunnel Outputs'}
           </span>
           {traceInfo?.state === 'running' && <StatusBadge state="running" label="running" />}

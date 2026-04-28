@@ -359,6 +359,13 @@ export function createPaneStore() {
     onNodesChange: async (nodeId, x, y) => {
       const { currentNetworkId } = get();
       if (!currentNetworkId) return;
+      set((s) => ({
+        nodes: s.nodes.map((node) =>
+          node.id === nodeId
+            ? { ...node, position: { x, y } }
+            : node,
+        ),
+      }));
       graphClient.setPosition(currentNetworkId, nodeId, x, y).catch(() => {});
     },
 
