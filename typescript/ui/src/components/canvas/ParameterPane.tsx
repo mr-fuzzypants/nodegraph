@@ -392,7 +392,7 @@ function HumanInputForm({
 
 // ── ParameterPane ──────────────────────────────────────────────────────────────
 
-export function ParameterPane({
+function ParameterPaneComponent({
   selected,
   onSetPortValue,
 }: {
@@ -539,3 +539,5 @@ export function ParameterPane({
     </aside>
   );
 }
+
+export const ParameterPane = React.memo(ParameterPaneComponent);

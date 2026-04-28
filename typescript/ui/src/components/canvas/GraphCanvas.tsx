@@ -176,16 +176,18 @@ function FlowCanvas() {
   // pointer move during a drag).
   // Track drags with a ref so store→local sync never overwrites in-progress drag
   // positions (debounced selection commits can refresh `nodes` mid-drag).
-  const [isDraggingNodes, setIsDraggingNodes] = useState(false);
+  // Use a DOM ref + classList instead of React state so toggling the
+  // `dragging-nodes` class does NOT trigger a React re-render.
   const isDraggingNodesRef = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
   const handleNodeDragStart = useCallback(() => {
     isDraggingNodesRef.current = true;
-    setIsDraggingNodes(true);
+    containerRef.current?.classList.add('dragging-nodes');
   }, []);
   const handleNodeDragStop = useCallback(() => {
     requestAnimationFrame(() => {
       isDraggingNodesRef.current = false;
-      setIsDraggingNodes(false);
+      containerRef.current?.classList.remove('dragging-nodes');
     });
   }, []);
 
@@ -269,10 +271,7 @@ function FlowCanvas() {
     [],
   );
 
-  // Handle node changes locally; persist on drag end. We must apply every
-  // change (including per-frame `position` deltas while dragging) because
-  // React Flow runs in controlled mode and uses the prop value to drive the
-  // drag visuals — skipping per-frame updates makes drag feel laggy.
+  // Handle node changes locally; persist on drag end.
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
       const hasSelectChange = changes.some((c) => c.type === 'select');
@@ -570,6 +569,7 @@ function FlowCanvas() {
 
   return (
     <div
+      ref={containerRef}
       className="flex flex-1 overflow-hidden"
       onKeyDown={handleKeyDown}
       tabIndex={0}
@@ -595,6 +595,7 @@ function FlowCanvas() {
           onSelectionDragStop={handleNodeDragStop}
           deleteKeyCode={null}
           selectionOnDrag={false}
+          selectNodesOnDrag={false}
           selectionKeyCode="Shift"
           selectionMode={SelectionMode.Partial}
           panOnDrag={PAN_ON_DRAG}
@@ -625,14 +626,12 @@ function FlowCanvas() {
               Group
             </ControlButton>
           </Controls>
-          {!isDraggingNodes && (
-            <MiniMap
-              style={MINIMAP_STYLE}
-              nodeColor={minimapNodeColor}
-              maskColor="rgba(2, 6, 23, 0.55)"
-              nodeStrokeColor="rgba(148, 163, 184, 0.3)"
-            />
-          )}
+          <MiniMap
+            style={MINIMAP_STYLE}
+            nodeColor={minimapNodeColor}
+            maskColor="rgba(2, 6, 23, 0.55)"
+            nodeStrokeColor="rgba(148, 163, 184, 0.3)"
+          />
         </ReactFlow>
       </div>
 

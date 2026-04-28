@@ -442,15 +442,15 @@
 /* ── Node cards ────────────────────────────────────────────────────────────── */
 
 :root {
-  --node-card-bg: color-mix(in srgb, var(--card) 94%, transparent);
-  --node-card-header: color-mix(in srgb, var(--sidebar) 88%, transparent);
+  --node-card-bg: var(--card);
+  --node-card-header: var(--sidebar);
   --node-card-border: color-mix(in srgb, var(--border) 82%, transparent);
   --node-card-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
 }
 
 .dark {
-  --node-card-bg: rgba(15, 23, 42, 0.9);
-  --node-card-header: rgba(15, 23, 42, 0.68);
+  --node-card-bg: rgb(15, 23, 42);
+  --node-card-header: rgb(11, 18, 36);
   --node-card-border: rgba(148, 163, 184, 0.14);
   --node-card-shadow: 0 18px 34px rgba(0, 0, 0, 0.18);
 }
@@ -462,7 +462,7 @@
   box-shadow: var(--node-card-shadow);
   overflow: hidden;
   position: relative;
-  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
 .node-card:hover {
@@ -492,6 +492,19 @@
 
 .node-card--waiting {
   border-color: #a78bfa;
+}
+
+/* Suppress expensive backdrop-filter on sidebars during node drags, and block
+   pointer events on non-dragging nodes to prevent hover-flicker (which causes
+   hidden action buttons to briefly appear as the dragged node passes them).
+   The parent div gets .dragging-nodes via classList — no React re-render. */
+.dragging-nodes .node-palette,
+.dragging-nodes .property-inspector {
+  backdrop-filter: none;
+}
+
+.dragging-nodes .react-flow__node:not(.dragging) {
+  pointer-events: none;
 }
 
 .node-accent-rail {

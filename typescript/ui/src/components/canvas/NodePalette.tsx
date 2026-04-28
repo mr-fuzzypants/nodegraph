@@ -200,7 +200,7 @@ function CategorySection({
           style={{ transform: open ? 'rotate(90deg)' : undefined }}
         />
       </UnstyledButton>
-      <Collapse in={open}>
+      <Collapse expanded={open}>
         <Stack gap={6} mt="xs">
           {types.map((type) => (
             <PaletteItem key={type} type={type} color={color} onAdd={onAdd} />
@@ -213,7 +213,7 @@ function CategorySection({
 
 // ── NodePalette ───────────────────────────────────────────────────────────────
 
-export function NodePalette({
+function NodePaletteComponent({
   onAddNode,
   onAddSubnetwork,
 }: {
@@ -328,3 +328,5 @@ export function NodePalette({
     </aside>
   );
 }
+
+export const NodePalette = React.memo(NodePaletteComponent);
