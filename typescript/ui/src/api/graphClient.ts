@@ -153,6 +153,29 @@ export const graphClient = {
       .then(() => undefined);
   },
 
+  /** Add a dynamic input port to a node that supports it. */
+  addDynamicInputPort(
+    networkId: string,
+    nodeId: string,
+    name: string,
+    valueType: string,
+  ): Promise<SerializedNetwork> {
+    return api
+      .post(`/networks/${networkId}/nodes/${nodeId}/input-ports`, { name, valueType })
+      .then((r) => r.data);
+  },
+
+  /** Remove a dynamic input port from a node that supports it. */
+  removeDynamicInputPort(
+    networkId: string,
+    nodeId: string,
+    portName: string,
+  ): Promise<void> {
+    return api
+      .delete(`/networks/${networkId}/nodes/${nodeId}/input-ports/${portName}`)
+      .then(() => undefined);
+  },
+
   /** Add a tunnel input or output port to a subnetwork */
   addTunnelPort(
     networkId: string,

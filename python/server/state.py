@@ -1414,6 +1414,110 @@ class GraphState:
         port.value = value
         node.markDirty()
 
+    # ── Dynamic node port helpers ──────────────────────────────────────────────
+
+    def _resolve_node_for_port_mutation(self, network_id: str, node_id: str) -> Node:
+        network = self.get_network(network_id)
+        if network is None:
+            raise ValueError(f"Network '{network_id}' not found")
+        node = network.graph.get_node_by_id(node_id)
+        if node is None:
+            raise ValueError(f"Node '{node_id}' not found")
+        if getattr(node, "network_id", None) != network.id:
+            raise ValueError(f"Node '{node_id}' is not in network '{network_id}'")
+        return node
+
+    @staticmethod
+    def _resolve_value_type(value_type: str) -> ValueType:
+        try:
+            return ValueType(value_type.lower())
+        except ValueError as exc:
+            raise ValueError(f"Unsupported value type '{value_type}'") from exc
+
+    def _delete_edges_for_node_port(
+        self,
+        network: NodeNetwork,
+        node_id: str,
+        port_name: str,
+    ) -> None:
+        for edge in list(network.graph.get_incoming_edges(node_id, port_name)):
+            network.graph.delete_edge(
+                edge.from_node_id,
+                edge.from_port_name,
+                edge.to_node_id,
+                edge.to_port_name,
+            )
+        for edge in list(network.graph.get_outgoing_edges(node_id, port_name)):
+            network.graph.delete_edge(
+                edge.from_node_id,
+                edge.from_port_name,
+                edge.to_node_id,
+                edge.to_port_name,
+            )
+
+    def add_dynamic_input_port(
+        self,
+        network_id: str,
+        node_id: str,
+        port_name: str,
+        value_type: str,
+    ) -> None:
+        node = self._resolve_node_for_port_mutation(network_id, node_id)
+        add_port = getattr(node, "add_dynamic_input_port", None)
+        if not callable(add_port):
+            raise ValueError(f"Node type '{node.type}' does not support dynamic input ports")
+        add_port(port_name, self._resolve_value_type(value_type))
+        node.markDirty()
+
+    def remove_dynamic_input_port(
+        self,
+        network_id: str,
+        node_id: str,
+        port_name: str,
+    ) -> None:
+        network = self.get_network(network_id)
+        if network is None:
+            raise ValueError(f"Network '{network_id}' not found")
+        node = self._resolve_node_for_port_mutation(network_id, node_id)
+        remove_port = getattr(node, "remove_dynamic_input_port", None)
+        if not callable(remove_port):
+            raise ValueError(f"Node type '{node.type}' does not support dynamic input ports")
+        remove_port(port_name)
+        self._delete_edges_for_node_port(network, node_id, port_name)
+        node.markDirty()
+
+    def add_dynamic_output_port(
+        self,
+        network_id: str,
+        node_id: str,
+        port_name: str,
+        value_type: str,
+        port_function: str = "DATA",
+    ) -> None:
+        node = self._resolve_node_for_port_mutation(network_id, node_id)
+        add_port = getattr(node, "add_dynamic_output_port", None)
+        if not callable(add_port):
+            raise ValueError(f"Node type '{node.type}' does not support dynamic output ports")
+        add_port(port_name, self._resolve_value_type(value_type), port_function.upper())
+        node.markDirty()
+
+    def remove_dynamic_output_port(
+        self,
+        network_id: str,
+        node_id: str,
+        port_name: str,
+    ) -> None:
+        network = self.get_network(network_id)
+        if network is None:
+            raise ValueError(f"Network '{network_id}' not found")
+        node = self._resolve_node_for_port_mutation(network_id, node_id)
+        remove_port = getattr(node, "remove_dynamic_output_port", None)
+        if not callable(remove_port):
+            raise ValueError(f"Node type '{node.type}' does not support dynamic output ports")
+        remove_port(port_name)
+        self._delete_edges_for_node_port(network, node_id, port_name)
+        node.markDirty()
+
     # ── Tunnel port helpers ───────────────────────────────────────────────────
 
     def add_tunnel_port(

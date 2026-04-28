@@ -45,6 +45,8 @@ const CV = {
   shadow:    'none',
 };
 
+const TEMPLATE_TOKEN_VALUE_TYPES = ['STRING', 'INT', 'FLOAT', 'BOOL'];
+
 // ── Value-type chip ────────────────────────────────────────────────────────────
 
 function ValueChip({ vt }: { vt: string }) {
@@ -571,6 +573,142 @@ function PromptTemplateEditPanel({
   );
 }
 
+function TemplateStringEditPanel({
+  nodeId,
+  templatePort,
+  tokenPorts,
+}: {
+  nodeId: string;
+  templatePort: SerializedPort | undefined;
+  tokenPorts: SerializedPort[];
+}) {
+  const currentNetworkId = usePaneStore((s) => s.currentNetworkId);
+  const refreshNodes = usePaneStore((s) => s.refreshNodes);
+  const setPortValue = usePaneStore((s) => s.setPortValue);
+  const [name, setName] = useState('');
+  const [valueType, setValueType] = useState('STRING');
+  const [busyPort, setBusyPort] = useState<string | null>(null);
+
+  const addTokenPort = async () => {
+    const trimmed = name.trim();
+    if (!currentNetworkId || !trimmed) return;
+    setBusyPort('__add__');
+    try {
+      await graphClient.addDynamicInputPort(currentNetworkId, nodeId, trimmed, valueType);
+      setName('');
+      await refreshNodes();
+    } finally {
+      setBusyPort(null);
+    }
+  };
+
+  const removeTokenPort = async (portName: string) => {
+    if (!currentNetworkId) return;
+    setBusyPort(portName);
+    try {
+      await graphClient.removeDynamicInputPort(currentNetworkId, nodeId, portName);
+      await refreshNodes();
+    } finally {
+      setBusyPort(null);
+    }
+  };
+
+  return (
+    <div style={{ borderTop: `1px solid ${CV.border}`, background: CV.header }}>
+      {templatePort && (
+        <EditableField
+          label="tstring"
+          value={templatePort.value}
+          mode="string"
+          rows={3}
+          onSave={(v) => setPortValue(nodeId, templatePort.name, v)}
+        />
+      )}
+      <div className="nodrag nopan" style={{ padding: '4px 10px 10px' }}>
+        <div style={{
+          fontSize: 9, color: CV.muted, fontFamily: 'ui-monospace, monospace',
+          textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5,
+        }}>
+          token inputs
+        </div>
+        {tokenPorts.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+            {tokenPorts.map((port) => (
+              <button
+                key={port.name}
+                className="nodrag nopan"
+                disabled={busyPort !== null}
+                onClick={() => removeTokenPort(port.name)}
+                onMouseDown={(event) => event.stopPropagation()}
+                style={{
+                  background: 'var(--background)',
+                  border: `1px solid ${CV.border}`,
+                  borderRadius: 999,
+                  color: CV.text,
+                  cursor: busyPort === null ? 'pointer' : 'default',
+                  fontFamily: 'ui-monospace, monospace',
+                  fontSize: 10,
+                  opacity: busyPort === null || busyPort === port.name ? 1 : 0.45,
+                  padding: '3px 8px',
+                }}
+                title={`Remove ${port.name}`}
+              >
+                {busyPort === port.name ? 'removing...' : `${port.name} x`}
+              </button>
+            ))}
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 6 }}>
+          <select
+            className="nodrag nopan"
+            value={valueType}
+            disabled={busyPort !== null}
+            onChange={(event) => setValueType(event.target.value)}
+            onMouseDown={(event) => event.stopPropagation()}
+            style={{ flex: '0 0 82px', background: 'var(--background)', color: CV.text, border: `1px solid ${CV.border}`, borderRadius: 5, fontFamily: 'ui-sans-serif, sans-serif', padding: 4 }}
+          >
+            {TEMPLATE_TOKEN_VALUE_TYPES.map((type) => (
+              <option key={type} value={type} style={{ background: '#020617', color: '#e2e8f0' }}>
+                {type.toLowerCase()}
+              </option>
+            ))}
+          </select>
+          <input
+            className="nodrag nopan"
+            value={name}
+            disabled={busyPort !== null}
+            onChange={(event) => setName(event.target.value)}
+            onMouseDown={(event) => event.stopPropagation()}
+            onKeyDown={(event) => {
+              event.stopPropagation();
+              if (event.key === 'Enter') addTokenPort();
+            }}
+            placeholder="token name..."
+            style={{ flex: 1, minWidth: 0, background: 'var(--background)', color: CV.text, border: `1px solid ${CV.border}`, borderRadius: 5, fontFamily: 'ui-sans-serif, sans-serif', padding: '4px 7px' }}
+          />
+          <button
+            className="nodrag nopan"
+            disabled={busyPort !== null || !name.trim()}
+            onClick={addTokenPort}
+            onMouseDown={(event) => event.stopPropagation()}
+            style={{
+              background: name.trim() && busyPort === null ? `${DATA_COL}22` : 'transparent',
+              border: `1px solid ${DATA_COL}88`,
+              borderRadius: 5,
+              color: DATA_COL,
+              cursor: name.trim() && busyPort === null ? 'pointer' : 'default',
+              width: 28,
+            }}
+            title="Add token input"
+          >
+            +
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Trace glow colours ────────────────────────────────────────────────────────
 
 const TRACE_GLOW = TRACE_COLORS;
@@ -727,6 +865,7 @@ export function FunctionNode({ id, data, selected }: NodeProps<Node<NodeData>>) 
   // Inline editing panels
   const isConstant       = data.nodeType === 'ConstantNode';
   const isPromptTemplate = data.nodeType === 'PromptTemplateNode';
+  const isTemplateString = data.nodeType === 'TemplateString';
   const isHumanInput     = data.nodeType === 'HumanInputNode';
 
   // Icon for this node type
@@ -900,6 +1039,13 @@ export function FunctionNode({ id, data, selected }: NodeProps<Node<NodeData>>) 
             nodeId={id}
             templatePort={inputs.find((p) => p.name === 'template')}
             variablesPort={inputs.find((p) => p.name === 'variables')}
+          />
+        )}
+        {isTemplateString && (
+          <TemplateStringEditPanel
+            nodeId={id}
+            templatePort={inputs.find((p) => p.name === 'tstring')}
+            tokenPorts={inputs.filter((p) => p.name !== 'tstring')}
           />
         )}
         {isHumanInput && (traceInfo as any)?.humanInputWaiting && (

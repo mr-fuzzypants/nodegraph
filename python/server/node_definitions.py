@@ -60,6 +60,13 @@ class ConstantNode(Node):
 
 @_safe_register("TemplateString")
 class TemplateStringNode(Node):
+    _TOKEN_VALUE_TYPES = {
+        ValueType.STRING,
+        ValueType.INT,
+        ValueType.FLOAT,
+        ValueType.BOOL,
+    }
+
     def __init__(self, name: str, type: str = "TemplateString", **kwargs):
         super().__init__(name, type, **kwargs)
         self.inputs["tstring"] = InputDataPort(self.id, "tstring", ValueType.STRING)
@@ -77,6 +84,8 @@ class TemplateStringNode(Node):
 
     def add_token_input(self, port_name: str, value_type: ValueType) -> None:
         self._validate_token_name(port_name)
+        if value_type not in self._TOKEN_VALUE_TYPES:
+            raise ValueError(f"Unsupported TemplateString token type '{value_type.value}'")
         self.add_data_input(port_name, data_type=value_type)
 
     def add_dynamic_input_port(self, port_name: str, value_type: ValueType) -> None:
