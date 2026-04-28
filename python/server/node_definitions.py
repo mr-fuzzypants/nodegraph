@@ -241,9 +241,21 @@ class PrintNode(Node):
     async def compute(self, executionContext=None) -> ExecutionResult:
         ctx_data = executionContext.get("data_inputs", {}) if executionContext else {}
         val = ctx_data.get("value", self.inputs["value"].value)
+        message = f"[PrintNode '{self.name}'] value = {val}"
         print("*************")
-        print(f"[PrintNode '{self.name}'] value =", val)
+        print(message)
         print("*************")
+        try:
+            from nodegraph.python.server.trace.trace_emitter import global_tracer
+            global_tracer.fire({
+                "type": "CONSOLE_OUTPUT",
+                "nodeId": self.id,
+                "nodeName": self.name,
+                "message": message,
+                "stream": "stdout",
+            })
+        except Exception:
+            pass
         result = ExecutionResult(ExecCommand.CONTINUE)
         result.control_outputs["next"] = True
         return result
@@ -558,11 +570,24 @@ class StepPrinterNode(Node):
         tname   = ctx.get("tool_name",    self.inputs["tool_name"].value)    or ""
 
         if stype == "tool_call":
-            print(f"  → {tname}({content})", flush=True)
+            message = f"  → {tname}({content})"
         elif stype == "tool_result":
-            print(f"  ← {content}", flush=True)
+            message = f"  ← {content}"
         else:
-            print(f"  [{stype}] {content}", flush=True)
+            message = f"  [{stype}] {content}"
+
+        print(message, flush=True)
+        try:
+            from nodegraph.python.server.trace.trace_emitter import global_tracer
+            global_tracer.fire({
+                "type": "CONSOLE_OUTPUT",
+                "nodeId": self.id,
+                "nodeName": self.name,
+                "message": message,
+                "stream": "stdout",
+            })
+        except Exception:
+            pass
 
         result = ExecutionResult(ExecCommand.CONTINUE)
         result.control_outputs["next"] = True

@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import type { TraceEvent } from '../types/traceTypes';
 import { useInfoLogStore } from '../store/infoLogStore';
+import { useConsoleLogStore } from '../store/consoleLogStore';
 
 const SOCKET_URL = 'http://localhost:3001';
 
@@ -46,6 +47,8 @@ function summarizeTraceEvent(event: TraceEvent): string {
       return `trace ${event.type} node=${event.nodeId} ${Math.round(event.progress * 100)}% ${event.message ?? ''}`.trim();
     case 'NODE_STATUS':
       return `trace ${event.type} node=${event.nodeId} ${event.status}`;
+    case 'CONSOLE_OUTPUT':
+      return `console ${event.nodeName ?? event.nodeId ?? 'system'}: ${event.message}`;
   }
 }
 
@@ -111,6 +114,17 @@ export function useTraceSocket(onEvent: (e: TraceEvent) => void): { send: (msg: 
     });
 
     socket.on('trace', (event: TraceEvent) => {
+      if (event.type === 'CONSOLE_OUTPUT') {
+        useConsoleLogStore.getState().addEntry({
+          source: event.stream ?? 'stdout',
+          message: event.message,
+          nodeId: event.nodeId,
+          nodeName: event.nodeName,
+          timestamp: event.ts,
+        });
+        return;
+      }
+
       logSocket(traceEventStatus(event), summarizeTraceEvent(event));
       cbRef.current(event);
     });

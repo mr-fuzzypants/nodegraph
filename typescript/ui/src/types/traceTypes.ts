@@ -9,6 +9,7 @@ export type TraceEvent =
       nodeName?: string; nodePath?: string; durationMs?: number; error: string; ts?: number }
   | { type: 'NODE_PROGRESS'; nodeId: string; progress: number; message?: string; ts?: number }
   | { type: 'NODE_STATUS';   nodeId: string; status: string; ts?: number }
+  | { type: 'CONSOLE_OUTPUT'; nodeId?: string; nodeName?: string; message: string; stream?: 'stdout' | 'stderr'; ts?: number }
   | { type: 'EDGE_ACTIVE';  fromNodeId: string; fromPort: string;
       toNodeId: string; toPort: string;
       value?: unknown; networkId?: string; ts?: number }

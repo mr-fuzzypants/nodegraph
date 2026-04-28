@@ -1120,7 +1120,7 @@ class GraphState:
         ks_decode = ks_net.createNode("Decode", "VAEDecode")
         ks_save   = ks_net.createNode("SaveImage", "SaveImage")
 
-        ks_loader.inputs["ckpt_path"].value = "/Users/robertpringle/development/ai_models"
+        ks_loader.inputs["ckpt_path"].value = "/Users/robertpringle/development/ai_models/sd-1.5/"
         ks_pos.inputs["text"].value = "a small robot sketching a node graph, soft studio light"
         ks_neg.inputs["text"].value = "blurry, low quality, distorted"
         ks_latent.inputs["width"].value = 512
@@ -1174,7 +1174,7 @@ class GraphState:
         st_final_decode   = step_net.createNode("FinalDecode", "VAEDecode")
         st_final_save     = step_net.createNode("SaveFinal", "SaveImage")
 
-        st_loader.inputs["ckpt_path"].value = "/Users/robertpringle/development/ai_models"
+        st_loader.inputs["ckpt_path"].value = "/Users/robertpringle/development/ai_models/sd-1.5/"
         st_pos.inputs["text"].value = "a watercolor city skyline generated step by step"
         st_neg.inputs["text"].value = "noise, artifacts, overexposed"
         st_latent.inputs["width"].value = 512
