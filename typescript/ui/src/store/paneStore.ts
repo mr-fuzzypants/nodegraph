@@ -7,6 +7,7 @@
 import { createStore } from 'zustand';
 import type { Connection, Edge as FlowEdge, Node as FlowNode } from '@xyflow/react';
 import { graphClient } from '../api/graphClient';
+import { layoutWithDagre, layoutAsGrid, type DagreRankDirection } from '../lib/dagreLayout';
 import type { NodeData, SerializedNetwork } from '../types/uiTypes';
 
 function toGraphNodeId(nodeId: string): string {
@@ -29,6 +30,8 @@ export interface PaneState {
   nodes: FlowNode<NodeData>[];
   edges: FlowEdge[];
   paneLoading: boolean;
+  /** Bumped after a successful auto-layout so the focused canvas can fitView. */
+  layoutCameraNonce: number;
 
   // ── Navigation ──
   loadNetwork: (networkId: string, name?: string) => Promise<void>;
@@ -65,9 +68,24 @@ export interface PaneState {
   connectToNewTunnelOutput: (sourceNodeId: string, sourcePort: string) => Promise<void>;
   removeTunnelPort: (name: string, direction: 'input' | 'output') => Promise<void>;
   renameTunnelPort: (oldName: string, newName: string, direction: 'input' | 'output') => Promise<void>;
+
+  /** Auto-layout: Dagre (flow) or grid (selection only). */
+  autoLayout: (opts: {
+    scope: AutoLayoutScope;
+    rankdir?: AutoLayoutDirection;
+    algorithm?: AutoLayoutAlgorithm;
+  }) => Promise<AutoLayoutResult>;
 }
 
 export type PaneStore = ReturnType<typeof createPaneStore>;
+
+export type AutoLayoutScope = 'full' | 'selection';
+export type AutoLayoutDirection = DagreRankDirection;
+export type AutoLayoutAlgorithm = 'dagre' | 'grid';
+
+export type AutoLayoutResult =
+  | { ok: true }
+  | { ok: false; message: string };
 
 // ── Helper ─────────────────────────────────────────────────────────────────────
 
@@ -136,6 +154,7 @@ export function createPaneStore() {
     nodes: [],
     edges: [],
     paneLoading: false,
+    layoutCameraNonce: 0,
 
     loadNetwork: async (networkId, name) => {
       set({ paneLoading: true });
@@ -509,6 +528,56 @@ export function createPaneStore() {
       if (!currentNetworkId) return;
       await graphClient.renameTunnelPort(currentNetworkId, oldName, newName, direction);
       await get().refreshNodes();
+    },
+
+    autoLayout: async ({ scope, rankdir = 'LR', algorithm = 'dagre' }) => {
+      const { currentNetworkId, nodes, edges } = get();
+      if (!currentNetworkId) {
+        return { ok: false as const, message: 'No network loaded.' };
+      }
+
+      if (algorithm === 'grid' && scope !== 'selection') {
+        return {
+          ok: false as const,
+          message: 'Grid layout applies to a selection only.',
+        };
+      }
+
+      const layoutNodes =
+        scope === 'full' ? [...nodes] : nodes.filter((n) => n.selected);
+
+      if (scope === 'selection' && layoutNodes.length === 0) {
+        return {
+          ok: false as const,
+          message: 'Select at least one node to auto-layout.',
+        };
+      }
+
+      if (layoutNodes.length === 0) {
+        return { ok: false as const, message: 'Nothing to layout.' };
+      }
+
+      const positions =
+        algorithm === 'grid'
+          ? layoutAsGrid(layoutNodes)
+          : layoutWithDagre(layoutNodes, edges, rankdir);
+
+      const nextNodes = nodes.map((n) => {
+        const p = positions.get(n.id);
+        return p ? { ...n, position: { x: p.x, y: p.y } } : n;
+      });
+      set((s) => ({
+        nodes: nextNodes,
+        layoutCameraNonce: s.layoutCameraNonce + 1,
+      }));
+
+      await Promise.all(
+        [...positions.entries()].map(([id, pos]) =>
+          graphClient.setPosition(currentNetworkId, id, pos.x, pos.y).catch(() => {}),
+        ),
+      );
+
+      return { ok: true as const };
     },
   }));
 }

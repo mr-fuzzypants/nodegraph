@@ -40,10 +40,16 @@ const MENU_TRIGGER_CLASS =
 function AppMenu({
   onSaveSelection,
   onGroupNodes,
+  onAutoLayoutFull,
+  onAutoLayoutSelection,
+  onAutoLayoutSelectionGrid,
   splitActions,
 }: {
   onSaveSelection: () => void;
   onGroupNodes: () => void;
+  onAutoLayoutFull: () => void;
+  onAutoLayoutSelection: () => void;
+  onAutoLayoutSelectionGrid: () => void;
   splitActions: SplitActions | null;
 }) {
   return (
@@ -117,6 +123,25 @@ function AppMenu({
             onClick={() => splitActions?.splitDown()}
           >
             Split Vertical
+          </Menu.Item>
+          <Menu.Divider />
+          <Menu.Item
+            onClick={onAutoLayoutFull}
+            rightSection={<span className="text-[10px] opacity-60">⌘L</span>}
+          >
+            Auto Layout Graph
+          </Menu.Item>
+          <Menu.Item
+            onClick={onAutoLayoutSelection}
+            rightSection={<span className="text-[10px] opacity-60">⌘⇧L</span>}
+          >
+            Auto Layout Selection
+          </Menu.Item>
+          <Menu.Item
+            onClick={onAutoLayoutSelectionGrid}
+            rightSection={<span className="text-[10px] opacity-60">⌥⌘L</span>}
+          >
+            Grid Layout Selection
           </Menu.Item>
         </Menu.Dropdown>
       </Menu>
@@ -224,6 +249,39 @@ export default function App() {
     void paneState.groupNodes(groupable.map((node) => node.id));
   }, [activePaneStore, setError]);
 
+  const handleAutoLayoutFull = useCallback(() => {
+    if (!activePaneStore) {
+      setError('No active graph pane.');
+      return;
+    }
+    void activePaneStore.getState().autoLayout({ scope: 'full' }).then((r) => {
+      if (r.ok === false) setError(r.message);
+      else setError(null);
+    });
+  }, [activePaneStore, setError]);
+
+  const handleAutoLayoutSelection = useCallback(() => {
+    if (!activePaneStore) {
+      setError('No active graph pane.');
+      return;
+    }
+    void activePaneStore.getState().autoLayout({ scope: 'selection' }).then((r) => {
+      if (r.ok === false) setError(r.message);
+      else setError(null);
+    });
+  }, [activePaneStore, setError]);
+
+  const handleAutoLayoutSelectionGrid = useCallback(() => {
+    if (!activePaneStore) {
+      setError('No active graph pane.');
+      return;
+    }
+    void activePaneStore.getState().autoLayout({ scope: 'selection', algorithm: 'grid' }).then((r) => {
+      if (r.ok === false) setError(r.message);
+      else setError(null);
+    });
+  }, [activePaneStore, setError]);
+
   const saveModalTitle = useMemo(() => 'Save Selection', []);
 
   return (
@@ -243,6 +301,9 @@ export default function App() {
         <AppMenu
           onSaveSelection={handleSaveSelection}
           onGroupNodes={handleGroupNodes}
+          onAutoLayoutFull={handleAutoLayoutFull}
+          onAutoLayoutSelection={handleAutoLayoutSelection}
+          onAutoLayoutSelectionGrid={handleAutoLayoutSelectionGrid}
           splitActions={splitActions}
         />
 

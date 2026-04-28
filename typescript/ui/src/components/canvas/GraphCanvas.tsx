@@ -39,6 +39,7 @@ import { ParameterPane } from './ParameterPane';
 import type { SelectedNodeInfo } from './ParameterPane';
 import { usePaneStore } from './PaneContext';
 import type { NodeData } from '../../types/uiTypes';
+import { useGraphStore } from '../../store/graphStore';
 import { useTraceStore } from '../../store/traceStore';
 
 // ── Custom node type registry ─────────────────────────────────────────────────
@@ -154,6 +155,10 @@ function FlowCanvas() {
   const connectToNewTunnelOutput = usePaneStore((s) => s.connectToNewTunnelOutput);
   const persistPosition = usePaneStore((s) => s.onNodesChange);
   const setSelection = usePaneStore((s) => s.setSelection);
+  const autoLayout = usePaneStore((s) => s.autoLayout);
+  const layoutCameraNonce = usePaneStore((s) => s.layoutCameraNonce);
+  const setError = useGraphStore((s) => s.setError);
+  const prevLayoutCamRef = useRef(0);
 
   // Local copy so ReactFlow can move nodes immediately without waiting for the server
   const [localNodes, setLocalNodes] = useState<FlowNode<NodeData>[]>(nodes);
@@ -169,9 +174,20 @@ function FlowCanvas() {
   // Track active node drags so we can hide the live MiniMap (which subscribes
   // to React Flow's internal node store and would otherwise re-render on every
   // pointer move during a drag).
+  // Track drags with a ref so store→local sync never overwrites in-progress drag
+  // positions (debounced selection commits can refresh `nodes` mid-drag).
   const [isDraggingNodes, setIsDraggingNodes] = useState(false);
-  const handleNodeDragStart = useCallback(() => setIsDraggingNodes(true), []);
-  const handleNodeDragStop = useCallback(() => setIsDraggingNodes(false), []);
+  const isDraggingNodesRef = useRef(false);
+  const handleNodeDragStart = useCallback(() => {
+    isDraggingNodesRef.current = true;
+    setIsDraggingNodes(true);
+  }, []);
+  const handleNodeDragStop = useCallback(() => {
+    requestAnimationFrame(() => {
+      isDraggingNodesRef.current = false;
+      setIsDraggingNodes(false);
+    });
+  }, []);
 
   // Selection-derived flags that the toolbar/inspector consume. We update
   // them only when a `select` change actually fires, so a pure position drag
@@ -203,6 +219,7 @@ function FlowCanvas() {
   // store) for no visible benefit, since our local state already shows the
   // correct selection.
   useEffect(() => {
+    if (isDraggingNodesRef.current) return;
     if (nodesStructurallyEqual(localNodesRef.current, nodes)) return;
     localNodesRef.current = nodes;
     setLocalNodes(nodes);
@@ -213,6 +230,15 @@ function FlowCanvas() {
     localEdgesRef.current = edges;
     setLocalEdges(edges);
   }, [edges]);
+
+  useEffect(() => {
+    const n = layoutCameraNonce;
+    if (n <= prevLayoutCamRef.current) return;
+    prevLayoutCamRef.current = n;
+    requestAnimationFrame(() => {
+      fitView({ padding: 0.18, duration: 320 });
+    });
+  }, [layoutCameraNonce, fitView]);
 
   const scheduleSelectionCommit = useCallback(
     (nextNodes: FlowNode<NodeData>[], nextEdges: FlowEdge[]) => {
@@ -340,8 +366,31 @@ function FlowCanvas() {
     void groupNodes(groupable.map((node) => node.id));
   }, [groupNodes]);
 
+  const runAutoLayout = useCallback(
+    async (scope: 'full' | 'selection', algorithm: 'dagre' | 'grid' = 'dagre') => {
+      const r = await autoLayout({ scope, algorithm });
+      if (r.ok === false) setError(r.message);
+      else setError(null);
+    },
+    [autoLayout, setError],
+  );
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      if (e.key.toLowerCase() === 'l' && e.metaKey && e.altKey && !e.ctrlKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        void runAutoLayout('selection', 'grid');
+        return;
+      }
+
+      if (e.key.toLowerCase() === 'l' && e.metaKey && !e.altKey && !e.ctrlKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        void runAutoLayout(e.shiftKey ? 'selection' : 'full', 'dagre');
+        return;
+      }
+
       if (e.key.toLowerCase() === 'g' && e.metaKey) {
         const groupable = localNodesRef.current.filter(
           (n) => n.selected && n.deletable !== false,
@@ -372,7 +421,7 @@ function FlowCanvas() {
         handleHome();
       }
     },
-    [deleteEdge, deleteNode, handleHome, handleGroupSelected],
+    [deleteEdge, deleteNode, handleHome, handleGroupSelected, runAutoLayout],
   );
 
   // ── Palette callbacks ──────────────────────────────────────────────────────
