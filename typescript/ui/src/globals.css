@@ -126,6 +126,283 @@
   --border: rgba(148, 163, 184, 0.12);
 }
 
+/* ── Property inspector (Mantine) ──────────────────────────────────────────── */
+
+.property-inspector {
+  width: 18rem;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow: hidden;
+  user-select: none;
+  background:
+    radial-gradient(circle at top right, rgba(94, 234, 212, 0.08), transparent 36%),
+    rgba(2, 6, 23, 0.88);
+  border-left: 1px solid rgba(148, 163, 184, 0.16);
+  box-shadow: -22px 0 42px rgba(2, 6, 23, 0.18);
+  backdrop-filter: blur(18px);
+}
+
+.property-inspector-header {
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(15, 23, 42, 0.58);
+}
+
+.property-inspector-scroll {
+  flex: 1;
+  min-height: 0;
+}
+
+.property-inspector-empty {
+  flex: 1;
+  padding: 24px;
+}
+
+.property-inspector-card,
+.property-inspector-port,
+.property-inspector-callout {
+  border-color: rgba(148, 163, 184, 0.16) !important;
+  background: rgba(15, 23, 42, 0.66) !important;
+  box-shadow: 0 12px 26px rgba(2, 6, 23, 0.14);
+}
+
+.property-inspector-card--hero {
+  background:
+    linear-gradient(135deg, rgba(13, 148, 136, 0.18), rgba(79, 70, 229, 0.1)),
+    rgba(15, 23, 42, 0.74) !important;
+}
+
+.property-inspector-port {
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease;
+}
+
+.property-inspector-port:hover {
+  transform: translateY(-1px);
+  border-color: rgba(94, 234, 212, 0.36) !important;
+  background: rgba(15, 23, 42, 0.82) !important;
+}
+
+.property-inspector-control .mantine-Input-input,
+.property-inspector-control.mantine-InputWrapper-root .mantine-Input-input {
+  background: rgba(15, 23, 42, 0.84);
+  border-color: rgba(148, 163, 184, 0.22);
+  color: #e2e8f0;
+}
+
+.property-inspector-control .mantine-Input-input:focus,
+.property-inspector-control.mantine-InputWrapper-root .mantine-Input-input:focus {
+  border-color: rgba(94, 234, 212, 0.56);
+  box-shadow: 0 0 0 1px rgba(94, 234, 212, 0.18);
+}
+
+.property-inspector-control .mantine-Checkbox-label {
+  color: rgba(226, 232, 240, 0.78);
+  font-size: 11px;
+}
+
+.property-inspector-value,
+.property-inspector-id,
+.property-inspector-pre {
+  color: #cbd5e1 !important;
+  background: rgba(2, 6, 23, 0.46) !important;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.property-inspector-value {
+  max-height: 5.8rem;
+  overflow: auto;
+  font-size: 10px;
+}
+
+.property-inspector-id {
+  flex: 1;
+  font-size: 10px;
+}
+
+.property-inspector-pre {
+  max-height: 9rem;
+  overflow: auto;
+  margin: 0;
+  padding: 8px;
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.property-inspector-callout--stream,
+.property-inspector-callout--step {
+  background: rgba(26, 20, 9, 0.82) !important;
+  border-color: rgba(212, 160, 23, 0.24) !important;
+}
+
+.property-inspector-callout--human {
+  background: rgba(59, 30, 96, 0.3) !important;
+  border-color: rgba(167, 139, 250, 0.34) !important;
+}
+
+.property-inspector-divider {
+  border-color: rgba(148, 163, 184, 0.14);
+}
+
+/* ── Node palette (Mantine) ────────────────────────────────────────────────── */
+
+.node-palette {
+  width: 16rem;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow: hidden;
+  user-select: none;
+  background:
+    radial-gradient(circle at top left, rgba(94, 234, 212, 0.08), transparent 34%),
+    rgba(2, 6, 23, 0.88);
+  border-right: 1px solid rgba(148, 163, 184, 0.16);
+  box-shadow: 22px 0 42px rgba(2, 6, 23, 0.18);
+  backdrop-filter: blur(18px);
+}
+
+.node-palette-header {
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(15, 23, 42, 0.58);
+}
+
+.node-palette-hint {
+  padding: 7px 14px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  background: rgba(15, 23, 42, 0.32);
+}
+
+.node-palette-hint-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #5eead4;
+  box-shadow: 0 0 14px rgba(94, 234, 212, 0.48);
+  flex-shrink: 0;
+}
+
+.node-palette-scroll {
+  flex: 1;
+  min-height: 0;
+}
+
+.node-palette-section,
+.node-palette-item,
+.node-palette-subnet {
+  border-color: rgba(148, 163, 184, 0.16) !important;
+  background: rgba(15, 23, 42, 0.66) !important;
+  box-shadow: 0 12px 26px rgba(2, 6, 23, 0.14);
+}
+
+.node-palette-section {
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.76), rgba(15, 23, 42, 0.52)),
+    rgba(15, 23, 42, 0.66) !important;
+}
+
+.node-palette-section-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.node-palette-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  box-shadow: 0 0 14px currentColor;
+  flex-shrink: 0;
+}
+
+.node-palette-section-chevron {
+  width: 14px;
+  height: 14px;
+  color: rgba(148, 163, 184, 0.56);
+  transition: transform 0.16s ease, color 0.16s ease;
+  flex-shrink: 0;
+}
+
+.node-palette-section-header:hover .node-palette-section-chevron {
+  color: rgba(226, 232, 240, 0.82);
+}
+
+.node-palette-item {
+  cursor: grab;
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease;
+}
+
+.node-palette-item:hover {
+  transform: translateY(-1px);
+  border-color: rgba(94, 234, 212, 0.36) !important;
+  background: rgba(15, 23, 42, 0.82) !important;
+}
+
+.node-palette-item:active {
+  cursor: grabbing;
+}
+
+.node-palette-item-icon {
+  color: var(--node-palette-accent);
+  background: color-mix(in srgb, var(--node-palette-accent) 16%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--node-palette-accent) 28%, transparent);
+}
+
+.node-palette-add {
+  opacity: 0;
+  transition: opacity 0.16s ease, background 0.16s ease;
+}
+
+.node-palette-item:hover .node-palette-add,
+.node-palette-add:focus-visible {
+  opacity: 1;
+}
+
+.node-palette-control .mantine-Input-input,
+.node-palette-control.mantine-InputWrapper-root .mantine-Input-input {
+  background: rgba(15, 23, 42, 0.84);
+  border-color: rgba(148, 163, 184, 0.22);
+  color: #e2e8f0;
+}
+
+.node-palette-control .mantine-Input-input:focus,
+.node-palette-control.mantine-InputWrapper-root .mantine-Input-input:focus {
+  border-color: rgba(94, 234, 212, 0.56);
+  box-shadow: 0 0 0 1px rgba(94, 234, 212, 0.18);
+}
+
+.node-palette-footer {
+  padding: 10px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(15, 23, 42, 0.44);
+}
+
+.node-palette-subnet {
+  background:
+    linear-gradient(135deg, rgba(13, 148, 136, 0.18), rgba(79, 70, 229, 0.08)),
+    rgba(15, 23, 42, 0.74) !important;
+}
+
+.node-palette-subnet-icon {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid #5eead4;
+  border-radius: 3px;
+  box-shadow: 0 0 14px rgba(94, 234, 212, 0.36);
+  flex-shrink: 0;
+}
+
 /* ── ReactFlow overrides ───────────────────────────────────────────────────── */
 
 .dark .react-flow__renderer {

@@ -6,10 +6,28 @@
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import { Copy, Check } from 'lucide-react';
+import {
+  ActionIcon,
+  Badge,
+  Box,
+  Button,
+  Center,
+  Checkbox,
+  Code,
+  Divider,
+  Group,
+  Kbd,
+  NumberInput,
+  Paper,
+  ScrollArea,
+  Stack,
+  Text,
+  Textarea,
+  TextInput,
+  Tooltip,
+} from '@mantine/core';
 import type { SerializedPort } from '../../types/uiTypes';
 import { useTraceStore } from '../../store/traceStore';
-import { ScrollArea } from '../ui/scroll-area';
-import { Badge } from '../ui/badge';
 import { graphClient } from '../../api/graphClient';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -48,12 +66,12 @@ function valueTypeColor(vt: string): string {
 // ── Semantic colour helpers (data-driven — kept as inline styles) ──────────────
 
 const portDotStyle = (color: string): React.CSSProperties => ({
-  width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0,
-});
-
-const portTypeBadgeStyle = (color: string): React.CSSProperties => ({
-  fontFamily: 'ui-monospace, monospace', fontSize: 9, color,
-  border: `1px solid ${color}`, borderRadius: 3, padding: '0 4px', lineHeight: 1.6, flexShrink: 0,
+  width: 8,
+  height: 8,
+  borderRadius: '50%',
+  background: color,
+  boxShadow: `0 0 14px ${color}66`,
+  flexShrink: 0,
 });
 
 // ── Inline port value editor ─────────────────────────────────────────────────
@@ -115,19 +133,21 @@ function InlinePortEditor({
   if (vt === 'bool') {
     const checked = port.value === true || port.value === 1 || port.value === 'true';
     return (
-      <div style={{ paddingLeft: 13, marginTop: 4 }}>
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={(e) => onCommit(port.name, e.target.checked)}
-          style={{ cursor: 'pointer', accentColor: '#6d7de8' }}
-        />
-      </div>
+      <Checkbox
+        mt={4}
+        ml={16}
+        size="xs"
+        color="teal"
+        label="Enabled"
+        className="property-inspector-control"
+        checked={checked}
+        onChange={(e) => onCommit(port.name, e.target.checked)}
+      />
     );
   }
 
   const commit = () => {
-    const { ok, value } = parsePortInput(port.valueType, draft);
+    const { ok, value } = parsePortInput(port.valueType, String(draft));
     if (ok) {
       setHasError(false);
       onCommit(port.name, value);
@@ -136,38 +156,68 @@ function InlinePortEditor({
     }
   };
 
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      commit();
+      (event.target as HTMLElement).blur();
+    }
+    if (event.key === 'Escape') {
+      setDraft(valueToEditString(port.valueType, port.value));
+      setHasError(false);
+      (event.target as HTMLElement).blur();
+    }
+  };
+
   const isNumeric = vt === 'int' || vt === 'float' || vt === 'number';
+  const isLongForm = vt === 'vector' || vt === 'list' || vt === 'array' || vt === 'any';
+  const commonProps = {
+    value: draft,
+    error: hasError ? 'Invalid value' : undefined,
+    onFocus: () => setFocused(true),
+    onBlur: () => { setFocused(false); commit(); },
+    className: 'property-inspector-control',
+  };
+
+  if (isNumeric) {
+    return (
+      <NumberInput
+        {...commonProps}
+        mt={4}
+        size="xs"
+        step={vt === 'int' ? 1 : 0.1}
+        allowDecimal={vt !== 'int'}
+        hideControls
+        placeholder={vt === 'int' ? '0' : '0.0'}
+        onChange={(value) => { setDraft(String(value ?? '')); setHasError(false); }}
+        onKeyDown={handleKeyDown}
+      />
+    );
+  }
+
+  if (isLongForm) {
+    return (
+      <Textarea
+        {...commonProps}
+        mt={4}
+        size="xs"
+        autosize
+        minRows={1}
+        maxRows={4}
+        placeholder={vt === 'vector' ? '[1, 2, 3]' : 'JSON or text'}
+        onChange={(e) => { setDraft(e.currentTarget.value); setHasError(false); }}
+        onKeyDown={handleKeyDown}
+      />
+    );
+  }
 
   return (
-    <input
-      type={isNumeric ? 'number' : 'text'}
-      step={vt === 'int' ? 1 : isNumeric ? 'any' : undefined}
-      value={draft}
-      onChange={(e) => { setDraft(e.target.value); setHasError(false); }}
-      onFocus={() => setFocused(true)}
-      onBlur={() => { setFocused(false); commit(); }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') { commit(); (e.target as HTMLInputElement).blur(); }
-        if (e.key === 'Escape') {
-          setDraft(valueToEditString(port.valueType, port.value));
-          setHasError(false);
-          (e.target as HTMLInputElement).blur();
-        }
-      }}
-      style={{
-        marginTop: 3,
-        background: 'var(--input)',
-        border: `1px solid ${hasError ? '#f87171' : 'var(--border)'}`,
-        borderRadius: 3,
-        color: hasError ? '#f87171' : 'var(--foreground)',
-        fontFamily: 'ui-sans-serif, sans-serif',
-        fontSize: 11,
-        padding: '2px 5px',
-        width: '100%',
-        boxSizing: 'border-box',
-        outline: 'none',
-      }}
-      placeholder={vt === 'vector' ? '[1, 2, 3]' : vt === 'int' ? '0' : ''}
+    <TextInput
+      {...commonProps}
+      mt={4}
+      size="xs"
+      placeholder="value"
+      onChange={(e) => { setDraft(e.currentTarget.value); setHasError(false); }}
+      onKeyDown={handleKeyDown}
     />
   );
 }
@@ -188,8 +238,15 @@ function PortList({
   if (ports.length === 0) return null;
 
   return (
-    <>
-      <div className="px-3 pt-2 pb-0.5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest font-sans">{title}</div>
+    <Stack gap="xs">
+      <Group justify="space-between" align="center" px={2}>
+        <Text size="10px" fw={800} tt="uppercase" lts="0.16em" c="dimmed">
+          {title}
+        </Text>
+        <Badge variant="light" color="gray" size="xs" radius="xl">
+          {ports.length}
+        </Badge>
+      </Group>
       {ports.map((p) => {
         const dotColor = PORT_COLORS[p.function] ?? '#9ea3c0';
         const typeColor = valueTypeColor(p.valueType);
@@ -202,25 +259,35 @@ function PortList({
           !p.connected;
 
         return (
-          <div key={p.name} className="px-3 py-1.5 flex flex-col gap-0.5 border-b border-border/40">
-            <div className="flex items-center gap-1.5">
-              <div style={portDotStyle(dotColor)} />
-              <span className="text-xs text-foreground flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-sans">{p.name}</span>
-              <span style={portTypeBadgeStyle(typeColor)}>{p.valueType}</span>
-            </div>
+          <Paper key={p.name} className="property-inspector-port" p="xs" radius="md" withBorder>
+            <Group gap="xs" wrap="nowrap" align="center">
+              <Box style={portDotStyle(dotColor)} />
+              <Text size="xs" fw={600} c="var(--foreground)" truncate style={{ flex: 1 }} title={p.name}>
+                {p.name}
+              </Text>
+              <Badge
+                variant="outline"
+                radius="sm"
+                size="xs"
+                ff="var(--font-mono)"
+                style={{ borderColor: typeColor, color: typeColor }}
+              >
+                {p.valueType}
+              </Badge>
+            </Group>
             {isEditable ? (
               <InlinePortEditor port={p} onCommit={onSetPortValue!} />
             ) : (
               displayValue !== null && (
-                <span className="text-[10px] text-muted-foreground pl-3 overflow-hidden text-ellipsis whitespace-nowrap font-mono" title={String(displayValue)}>
-                  = {displayValue}
-                </span>
+                <Code block mt={6} className="property-inspector-value" title={String(displayValue)}>
+                  {displayValue}
+                </Code>
               )
             )}
-          </div>
+          </Paper>
         );
       })}
-    </>
+    </Stack>
   );
 }
 
@@ -243,20 +310,22 @@ function NodeIdRow({ id }: { id: string }) {
   }, [id]);
 
   return (
-    <div
-      className="flex items-center gap-1 group cursor-pointer"
-      onClick={copy}
-      title="Click to copy"
-    >
-      <span className="text-[10px] text-muted-foreground break-all font-mono select-text flex-1">
+    <Group gap="xs" wrap="nowrap" align="start">
+      <Code block className="property-inspector-id">
         {id}
-      </span>
-      <span className="shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
-        {copied
-          ? <Check size={11} className="text-green-400" />
-          : <Copy size={11} />}
-      </span>
-    </div>
+      </Code>
+      <Tooltip label={copied ? 'Copied' : 'Copy node id'} withArrow>
+        <ActionIcon
+          size="sm"
+          variant="subtle"
+          color={copied ? 'green' : 'gray'}
+          onClick={copy}
+          aria-label="Copy node id"
+        >
+          {copied ? <Check size={14} /> : <Copy size={14} />}
+        </ActionIcon>
+      </Tooltip>
+    </Group>
   );
 }
 
@@ -281,39 +350,42 @@ function HumanInputForm({
 
   return (
     <>
-      <div className="border-t border-border my-2" />
-      <div className="mx-3 mb-3">
-        <div className="text-[10px] font-mono tracking-widest mb-1.5" style={{ color: '#a78bfa' }}>⌨ AWAITING INPUT</div>
-        <div className="text-xs leading-relaxed mb-2 font-sans" style={{ color: 'var(--muted-foreground)' }}>{prompt}</div>
-        <textarea
-          rows={3}
-          value={response}
-          placeholder="Type your response…"
-          onChange={(e) => setResponse(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); submit(); }
-          }}
-          className="w-full rounded-md text-xs font-sans p-2 resize-none outline-none"
-          style={{ background: 'var(--background)', border: '1px solid #a78bfa88', color: 'var(--foreground)', lineHeight: 1.5 }}
-        />
-        <div className="flex items-center justify-between mt-1.5">
-          <span className="text-[10px] font-mono" style={{ color: 'var(--muted-foreground)' }}>⌘↵ to submit</span>
-          <button
-            onClick={submit}
-            disabled={submitting || !response.trim()}
-            className="text-[10px] font-mono rounded px-2 py-1"
-            style={{
-              background: response.trim() && !submitting ? '#a78bfa' : 'transparent',
-              border: '1px solid #a78bfa',
-              color: response.trim() && !submitting ? 'var(--background)' : '#a78bfa',
-              cursor: response.trim() && !submitting ? 'pointer' : 'default',
-              opacity: submitting ? 0.5 : 1,
+      <Divider className="property-inspector-divider" />
+      <Paper className="property-inspector-callout property-inspector-callout--human" p="sm" radius="md" withBorder>
+        <Stack gap="xs">
+          <Text size="10px" ff="var(--font-mono)" lts="0.16em" tt="uppercase" c="violet.3">
+            Awaiting Input
+          </Text>
+          <Text size="xs" c="dimmed" lh={1.5}>{prompt}</Text>
+          <Textarea
+            minRows={3}
+            autosize
+            maxRows={5}
+            size="xs"
+            className="property-inspector-control"
+            value={response}
+            placeholder="Type your response..."
+            onChange={(e) => setResponse(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); submit(); }
             }}
-          >
-            {submitting ? '…' : 'Submit'}
-          </button>
-        </div>
-      </div>
+          />
+          <Group justify="space-between" align="center">
+            <Text size="10px" c="dimmed">
+              <Kbd size="xs">cmd</Kbd> + <Kbd size="xs">enter</Kbd>
+            </Text>
+            <Button
+              size="compact-xs"
+              color="violet"
+              variant={response.trim() && !submitting ? 'filled' : 'outline'}
+              onClick={submit}
+              disabled={submitting || !response.trim()}
+            >
+              {submitting ? 'Submitting...' : 'Submit'}
+            </Button>
+          </Group>
+        </Stack>
+      </Paper>
     </>
   );
 }
@@ -330,111 +402,138 @@ export function ParameterPane({
   const traceInfo = useTraceStore(s => selected ? s.nodeStates[selected.id] : undefined);
 
   return (
-    <aside className="w-56 bg-background border-l border-border flex flex-col overflow-hidden shrink-0 select-none panel">
-      <div className="px-3 pt-2.5 pb-2 border-b border-border shrink-0">
-        <span className="block text-xs font-bold text-primary tracking-wide font-sans">Inspector</span>
-      </div>
+    <aside className="property-inspector panel">
+      <Box className="property-inspector-header">
+        <Text size="10px" fw={800} tt="uppercase" lts="0.18em" c="dimmed">
+          Property Inspector
+        </Text>
+        <Text size="xs" c="teal.2" fw={700}>
+          Node details
+        </Text>
+      </Box>
 
       {!selected ? (
-        <div className="text-xs text-muted-foreground p-4 text-center font-sans leading-relaxed">Select a node<br />to inspect it</div>
+        <Center className="property-inspector-empty">
+          <Stack gap={6} align="center">
+            <Text size="sm" fw={700} c="var(--foreground)">No node selected</Text>
+            <Text size="xs" c="dimmed" ta="center" maw={180}>
+              Select a node on the canvas to inspect and edit its disconnected inputs.
+            </Text>
+          </Stack>
+        </Center>
       ) : (
-        <ScrollArea className="flex-1">
-          {/* Node identity */}
-          <div className="px-3 pt-2.5 pb-2 border-b border-border mb-1">
-            <span className="block font-medium text-sm text-foreground overflow-hidden text-ellipsis whitespace-nowrap mb-1.5 font-sans" title={selected.label}>
-              {selected.label}
-            </span>
-            <div className="flex gap-1 flex-wrap">
-              <Badge variant="outline" style={{ borderColor: selected.flowType === 'networkNode' ? '#a78bfa' : '#6d7de8', color: selected.flowType === 'networkNode' ? '#a78bfa' : '#6d7de8' }}>
-                {selected.flowType === 'networkNode' ? 'NETWORK' : 'FUNCTION'}
-              </Badge>
-              {selected.isFlowControlNode && (
-                <Badge variant="outline" style={{ borderColor: '#f38ba8', color: '#f38ba8' }}>CONTROL</Badge>
-              )}
-              {selected.subnetworkId && (
-                <Badge variant="outline" style={{ borderColor: '#4ade80', color: '#4ade80' }}>SUBGRAPH</Badge>
-              )}
-            </div>
-          </div>
+        <ScrollArea className="property-inspector-scroll" scrollbarSize={6}>
+          <Stack gap="sm" p="sm">
+            {/* Node identity */}
+            <Paper className="property-inspector-card property-inspector-card--hero" p="sm" radius="lg" withBorder>
+              <Stack gap="xs">
+                <Text size="sm" fw={700} c="var(--foreground)" truncate title={selected.label}>
+                  {selected.label}
+                </Text>
+                <Group gap={6}>
+                  <Badge
+                    variant="light"
+                    color={selected.flowType === 'networkNode' ? 'violet' : 'teal'}
+                    radius="xl"
+                    size="sm"
+                  >
+                    {selected.flowType === 'networkNode' ? 'Network' : 'Function'}
+                  </Badge>
+                  {selected.isFlowControlNode && (
+                    <Badge variant="light" color="pink" radius="xl" size="sm">Control</Badge>
+                  )}
+                  {selected.subnetworkId && (
+                    <Badge variant="light" color="green" radius="xl" size="sm">Subgraph</Badge>
+                  )}
+                </Group>
+              </Stack>
+            </Paper>
 
-          {/* Ports */}
-          <PortList
-            ports={selected.inputs}
-            title="Inputs"
-            nodeId={selected.id}
-            onSetPortValue={
-              onSetPortValue
-                ? (pn, v) => onSetPortValue(selected.id, pn, v)
-                : undefined
-            }
-          />
-
-          {selected.inputs.length > 0 && selected.outputs.length > 0 && (
-            <div className="border-t border-border my-2" />
-          )}
-          <PortList ports={selected.outputs} title="Outputs" />
-
-          {/* ── Live trace panels ────────────────────────────────── */}
-
-          {traceInfo?.streamBuffer !== undefined && (
-            <>
-              <div className="border-t border-border my-2" />
-              <div className="mx-3 mb-2">
-                <div className="text-[10px] font-mono tracking-widest mb-1" style={{ color: '#8b7355' }}>⟳ STREAMING</div>
-                <div className="text-xs font-mono leading-relaxed max-h-36 overflow-y-auto rounded-md p-2"
-                  style={{ color: '#e8d5a3', background: '#1a1409', border: '1px solid #5c3a1e', whiteSpace: 'pre-wrap' }}>
-                  {traceInfo.streamBuffer || '…'}
-                </div>
-              </div>
-            </>
-          )}
-
-          {traceInfo?.agentSteps && traceInfo.agentSteps.length > 0 && (
-            <>
-              <div className="border-t border-border my-2" />
-              <div className="mx-3 mb-2">
-                <div className="text-[10px] tracking-widest mb-1" style={{ color: '#8b7355' }}>AGENT STEPS</div>
-                {traceInfo.agentSteps.map(step => (
-                  <div key={step.step} className="rounded-md p-2 mb-1" style={{ background: '#1a1409', border: '1px solid #3d2a10' }}>
-                    <div className="text-[10px] mb-0.5" style={{ color: '#d4a017' }}>
-                      Step {step.step} — <span style={{ color: '#a78bfa' }}>{step.tool}</span>
-                    </div>
-                    <div className="text-[10px]" style={{ color: '#8b7355' }}>in: <span style={{ color: '#c9cce8' }}>{step.input}</span></div>
-                    <div className="text-[10px] mt-0.5" style={{ color: '#8b7355' }}>out: <span style={{ color: '#4ade80' }}>{step.output}</span></div>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-
-          {traceInfo?.detail && Object.keys(traceInfo.detail).length > 0 && (
-            <>
-              <div className="border-t border-border my-2" />
-              <div className="mx-3 mb-2 flex flex-wrap gap-1">
-                {Object.entries(traceInfo.detail).map(([k, v]) => (
-                  <span key={k} className="text-[10px] rounded-sm px-1.5 py-0.5 font-mono" style={{ background: '#1a1409', border: '1px solid #3d2a10', color: '#8b7355' }}>
-                    {k}: <span style={{ color: '#d4a017' }}>{String(v)}</span>
-                  </span>
-                ))}
-              </div>
-            </>
-          )}
-
-          <div className="border-t border-border my-2" />
-          <div className="px-3 py-2">
-            <span className="block text-[10px] text-muted-foreground mb-0.5 font-sans uppercase tracking-widest">Node ID</span>
-            <NodeIdRow id={selected.id} />
-          </div>
-
-          {/* ── Human-in-the-loop input ─────────────────────────── */}
-          {(traceInfo as any)?.humanInputWaiting && (
-            <HumanInputForm
+            {/* Ports */}
+            <PortList
+              ports={selected.inputs}
+              title="Inputs"
               nodeId={selected.id}
-              prompt={(traceInfo as any).humanInputWaiting.prompt}
-              runId={(traceInfo as any).humanInputWaiting.runId}
-              networkId={(traceInfo as any).humanInputWaiting.networkId}
+              onSetPortValue={
+                onSetPortValue
+                  ? (pn, v) => onSetPortValue(selected.id, pn, v)
+                  : undefined
+              }
             />
-          )}
+
+            {selected.inputs.length > 0 && selected.outputs.length > 0 && (
+              <Divider className="property-inspector-divider" />
+            )}
+            <PortList ports={selected.outputs} title="Outputs" />
+
+            {/* Live trace panels */}
+            {traceInfo?.streamBuffer !== undefined && (
+              <>
+                <Divider className="property-inspector-divider" />
+                <Paper className="property-inspector-callout property-inspector-callout--stream" p="sm" radius="md" withBorder>
+                  <Stack gap={6}>
+                    <Text size="10px" ff="var(--font-mono)" lts="0.16em" tt="uppercase" c="yellow.5">
+                      Streaming
+                    </Text>
+                    <Box component="pre" className="property-inspector-pre">
+                      {traceInfo.streamBuffer || '...'}
+                    </Box>
+                  </Stack>
+                </Paper>
+              </>
+            )}
+
+            {traceInfo?.agentSteps && traceInfo.agentSteps.length > 0 && (
+              <>
+                <Divider className="property-inspector-divider" />
+                <Stack gap="xs">
+                  <Text size="10px" fw={800} tt="uppercase" lts="0.16em" c="dimmed">
+                    Agent Steps
+                  </Text>
+                  {traceInfo.agentSteps.map(step => (
+                    <Paper key={step.step} className="property-inspector-callout property-inspector-callout--step" p="xs" radius="md" withBorder>
+                      <Text size="10px" c="yellow.5" mb={3}>
+                        Step {step.step} <Text span c="violet.3">{step.tool}</Text>
+                      </Text>
+                      <Text size="10px" c="dimmed">in: <Text span c="blue.1">{step.input}</Text></Text>
+                      <Text size="10px" c="dimmed" mt={2}>out: <Text span c="green.3">{step.output}</Text></Text>
+                    </Paper>
+                  ))}
+                </Stack>
+              </>
+            )}
+
+            {traceInfo?.detail && Object.keys(traceInfo.detail).length > 0 && (
+              <>
+                <Divider className="property-inspector-divider" />
+                <Group gap={6}>
+                  {Object.entries(traceInfo.detail).map(([k, v]) => (
+                    <Badge key={k} variant="light" color="yellow" radius="sm" ff="var(--font-mono)">
+                      {k}: {String(v)}
+                    </Badge>
+                  ))}
+                </Group>
+              </>
+            )}
+
+            <Divider className="property-inspector-divider" />
+            <Paper className="property-inspector-card" p="sm" radius="md" withBorder>
+              <Text size="10px" c="dimmed" mb={6} tt="uppercase" lts="0.16em" fw={800}>
+                Node ID
+              </Text>
+              <NodeIdRow id={selected.id} />
+            </Paper>
+
+            {/* Human-in-the-loop input */}
+            {(traceInfo as any)?.humanInputWaiting && (
+              <HumanInputForm
+                nodeId={selected.id}
+                prompt={(traceInfo as any).humanInputWaiting.prompt}
+                runId={(traceInfo as any).humanInputWaiting.runId}
+                networkId={(traceInfo as any).humanInputWaiting.networkId}
+              />
+            )}
+          </Stack>
         </ScrollArea>
       )}
     </aside>

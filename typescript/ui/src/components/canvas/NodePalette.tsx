@@ -9,12 +9,24 @@
  * - Subnetwork section with name input
  */
 import React, { useMemo, useState } from 'react';
+import {
+  ActionIcon,
+  Badge,
+  Box,
+  Button,
+  Collapse,
+  Group,
+  Paper,
+  ScrollArea,
+  Stack,
+  Text,
+  TextInput,
+  ThemeIcon,
+  Tooltip,
+  UnstyledButton,
+} from '@mantine/core';
 import { useGraphStore } from '../../store/graphStore';
 import { getNodeIcon } from '../../lib/nodeIcons';
-import { Input } from '../ui/input';
-import { Button } from '../ui/button';
-import { ScrollArea } from '../ui/scroll-area';
-import { cn } from '../../lib/utils';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Add01Icon, ArrowRight01Icon } from '@hugeicons/core-free-icons';
 
@@ -106,25 +118,47 @@ function PaletteItem({
   };
 
   return (
-    <div
-      className="group flex items-center gap-2 px-2.5 py-1.5 cursor-grab hover:bg-accent rounded-sm mx-1 transition-colors"
+    <Paper
+      className="node-palette-item"
+      p={6}
+      radius="md"
+      withBorder
       draggable
       onDragStart={handleDragStart}
       title={`Drag to canvas or click + to add ${type}`}
     >
-      <NodeIcon size={13} color={color} strokeWidth={2} style={{ flexShrink: 0 }} />
-      <span className="text-xs text-foreground flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-sans">
-        {type.replace('Node', '')}
-      </span>
-      <button
-        className="opacity-0 group-hover:opacity-100 text-[10px] px-1.5 py-0.5 rounded-sm border transition-opacity leading-tight"
-        style={{ borderColor: color, color }}
-        onClick={(e) => { e.stopPropagation(); onAdd(type); }}
-        title={`Add ${type}`}
-      >
-        +
-      </button>
-    </div>
+      <Group gap="xs" wrap="nowrap">
+        <ThemeIcon
+          className="node-palette-item-icon"
+          variant="light"
+          size="sm"
+          radius="md"
+          style={{ '--node-palette-accent': color } as React.CSSProperties}
+        >
+          <NodeIcon size={14} color={color} strokeWidth={2} />
+        </ThemeIcon>
+        <Box style={{ flex: 1, minWidth: 0 }}>
+          <Text size="xs" fw={650} c="var(--foreground)" truncate>
+            {type.replace('Node', '')}
+          </Text>
+          <Text size="9px" c="dimmed" truncate ff="var(--font-mono)">
+            {type}
+          </Text>
+        </Box>
+        <Tooltip label={`Add ${type}`} withArrow>
+          <ActionIcon
+            className="node-palette-add"
+            size="sm"
+            variant="subtle"
+            aria-label={`Add ${type}`}
+            style={{ color }}
+            onClick={(e) => { e.stopPropagation(); onAdd(type); }}
+          >
+            <HugeiconsIcon icon={Add01Icon} className="!size-3.5" />
+          </ActionIcon>
+        </Tooltip>
+      </Group>
+    </Paper>
   );
 }
 
@@ -146,25 +180,34 @@ function CategorySection({
   if (types.length === 0) return null;
 
   return (
-    <div className="mb-1">
-      <button
-        className="w-full flex items-center gap-1.5 px-2.5 py-1 cursor-pointer select-none hover:bg-accent rounded-sm mx-1 transition-colors"
+    <Paper className="node-palette-section" p="xs" radius="lg" withBorder>
+      <UnstyledButton
+        className="node-palette-section-header"
         onClick={() => setOpen((o) => !o)}
-        style={{ width: 'calc(100% - 8px)' }}
       >
-        <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: color }} />
-        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex-1 text-left font-sans">
-          {name}
-        </span>
+        <Group gap="xs" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
+          <Box className="node-palette-dot" style={{ background: color }} />
+          <Text size="10px" fw={800} c="dimmed" tt="uppercase" lts="0.16em" truncate>
+            {name}
+          </Text>
+        </Group>
+        <Badge variant="light" color="gray" size="xs" radius="xl">
+          {types.length}
+        </Badge>
         <HugeiconsIcon
           icon={ArrowRight01Icon}
-          className={cn('!size-3 text-muted-foreground/50 transition-transform', open && 'rotate-90')}
+          className="node-palette-section-chevron"
+          style={{ transform: open ? 'rotate(90deg)' : undefined }}
         />
-      </button>
-      {open && types.map((type) => (
-        <PaletteItem key={type} type={type} color={color} onAdd={onAdd} />
-      ))}
-    </div>
+      </UnstyledButton>
+      <Collapse in={open}>
+        <Stack gap={6} mt="xs">
+          {types.map((type) => (
+            <PaletteItem key={type} type={type} color={color} onAdd={onAdd} />
+          ))}
+        </Stack>
+      </Collapse>
+    </Paper>
   );
 }
 
@@ -203,65 +246,85 @@ export function NodePalette({
   };
 
   return (
-    <aside className="w-48 bg-background border-r border-border flex flex-col overflow-hidden shrink-0 select-none panel">
+    <aside className="node-palette panel">
       {/* Header + search */}
-      <div className="px-2.5 pt-2.5 pb-2 border-b border-border shrink-0">
-        <span className="block text-xs font-bold text-primary tracking-wide mb-2 font-sans">
-          Node Palette
-        </span>
-        <Input
+      <Box className="node-palette-header">
+        <Group justify="space-between" align="start" mb="xs">
+          <Box>
+            <Text size="10px" fw={800} tt="uppercase" lts="0.18em" c="dimmed">
+              Node Palette
+            </Text>
+            <Text size="xs" c="teal.2" fw={700}>
+              Add building blocks
+            </Text>
+          </Box>
+          <Badge variant="light" color="teal" radius="xl" size="sm">
+            {nodeTypes.length}
+          </Badge>
+        </Group>
+        <TextInput
           placeholder="Search…"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => setSearch(e.currentTarget.value)}
           spellCheck={false}
-          className="h-6 text-xs"
+          size="xs"
+          className="node-palette-control"
         />
-      </div>
+      </Box>
 
       {/* Hint */}
-      <div className="px-2.5 py-1 text-[10px] text-muted-foreground/60 shrink-0 border-b border-border font-sans">
-        Click + or drag to canvas
-      </div>
+      <Group className="node-palette-hint" gap={6} wrap="nowrap">
+        <Box className="node-palette-hint-dot" />
+        <Text size="10px" c="dimmed">Click add or drag cards onto the canvas</Text>
+      </Group>
 
       {/* Categorised node list */}
-      <ScrollArea className="flex-1 py-1.5">
-        {CATEGORY_ORDER.map((cat) => (
-          <CategorySection
-            key={cat}
-            name={cat}
-            types={groups[cat] ?? []}
-            color={CATEGORY_COLORS[cat]}
-            onAdd={onAddNode}
-          />
-        ))}
+      <ScrollArea className="node-palette-scroll" scrollbarSize={6}>
+        <Stack gap="xs" p="sm">
+          {CATEGORY_ORDER.map((cat) => (
+            <CategorySection
+              key={cat}
+              name={cat}
+              types={groups[cat] ?? []}
+              color={CATEGORY_COLORS[cat]}
+              onAdd={onAddNode}
+            />
+          ))}
+        </Stack>
       </ScrollArea>
 
       {/* Subnetwork creator */}
-      <div className="px-2.5 py-2.5 border-t border-border shrink-0">
-        <div className="flex items-center gap-1.5 mb-2">
-          <div className="w-2 h-2 rounded-sm border-[1.5px]" style={{ borderColor: 'var(--primary)' }} />
-          <span className="text-[10px] font-bold text-primary uppercase tracking-widest font-sans">
-            Subnetwork
-          </span>
-        </div>
-        <Input
-          placeholder="Name…"
-          value={subnetName}
-          onChange={(e) => setSubnetName(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSubnetAdd()}
-          spellCheck={false}
-          className="h-6 text-xs mb-1.5"
-        />
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full h-7 text-xs gap-1.5 border-primary text-primary hover:bg-primary/10"
-          onClick={handleSubnetAdd}
-        >
-          <HugeiconsIcon icon={Add01Icon} className="!size-3" />
-          Add Subnetwork
-        </Button>
-      </div>
+      <Box className="node-palette-footer">
+        <Paper className="node-palette-subnet" p="sm" radius="lg" withBorder>
+          <Stack gap="xs">
+            <Group gap="xs" wrap="nowrap">
+              <Box className="node-palette-subnet-icon" />
+              <Text size="10px" fw={800} c="teal.2" tt="uppercase" lts="0.16em">
+                Subnetwork
+              </Text>
+            </Group>
+            <TextInput
+              placeholder="Name..."
+              value={subnetName}
+              onChange={(e) => setSubnetName(e.currentTarget.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSubnetAdd()}
+              spellCheck={false}
+              size="xs"
+              className="node-palette-control"
+            />
+            <Button
+              variant="light"
+              color="teal"
+              size="compact-sm"
+              fullWidth
+              leftSection={<HugeiconsIcon icon={Add01Icon} className="!size-3.5" />}
+              onClick={handleSubnetAdd}
+            >
+              Add Subnetwork
+            </Button>
+          </Stack>
+        </Paper>
+      </Box>
     </aside>
   );
 }
