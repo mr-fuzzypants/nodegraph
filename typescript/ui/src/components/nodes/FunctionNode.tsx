@@ -844,7 +844,7 @@ function HeaderProgress({
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function FunctionNode({ id, data, selected }: NodeProps<Node<NodeData>>) {
+function FunctionNodeComponent({ id, data, selected }: NodeProps<Node<NodeData>>) {
   const executeNode = usePaneStore((s) => s.executeNode);
   const setPortValue = usePaneStore((s) => s.setPortValue);
   const renameNode = usePaneStore((s) => s.renameNode);
@@ -1060,3 +1060,13 @@ export function FunctionNode({ id, data, selected }: NodeProps<Node<NodeData>>) 
     </div>
   );
 }
+
+export const FunctionNode = React.memo(
+  FunctionNodeComponent,
+  (prev, next) =>
+    prev.id === next.id &&
+    prev.selected === next.selected &&
+    prev.data === next.data &&
+    prev.dragging === next.dragging,
+);
+FunctionNode.displayName = 'FunctionNode';

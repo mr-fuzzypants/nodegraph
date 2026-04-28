@@ -149,7 +149,7 @@ function OutputRow({ port, expanded }: { port: SerializedPort; expanded: boolean
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function NetworkNode({ id: _id, data, selected }: NodeProps<Node<NodeData>>) {
+function NetworkNodeComponent({ id: _id, data, selected }: NodeProps<Node<NodeData>>) {
   const enterSubnetwork = usePaneStore((s) => s.enterSubnetwork);
   const renameNode = usePaneStore((s) => s.renameNode);
   const [enterHov, setEnterHov] = useState(false);
@@ -302,3 +302,13 @@ export function NetworkNode({ id: _id, data, selected }: NodeProps<Node<NodeData
     </div>
   );
 }
+
+export const NetworkNode = React.memo(
+  NetworkNodeComponent,
+  (prev, next) =>
+    prev.id === next.id &&
+    prev.selected === next.selected &&
+    prev.data === next.data &&
+    prev.dragging === next.dragging,
+);
+NetworkNode.displayName = 'NetworkNode';

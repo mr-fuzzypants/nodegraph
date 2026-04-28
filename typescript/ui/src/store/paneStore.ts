@@ -382,16 +382,27 @@ export function createPaneStore() {
     setSelection: (nodeIds, edgeIds) => {
       const selectedNodeIds = new Set(nodeIds);
       const selectedEdgeIds = new Set(edgeIds);
-      set((s) => ({
-        nodes: s.nodes.map((node) => ({
-          ...node,
-          selected: selectedNodeIds.has(node.id),
-        })),
-        edges: s.edges.map((edge) => ({
-          ...edge,
-          selected: selectedEdgeIds.has(edge.id),
-        })),
-      }));
+      set((s) => {
+        let nodesChanged = false;
+        let edgesChanged = false;
+        const nodes = s.nodes.map((node) => {
+          const selected = selectedNodeIds.has(node.id);
+          if ((node.selected ?? false) === selected) return node;
+          nodesChanged = true;
+          return { ...node, selected };
+        });
+        const edges = s.edges.map((edge) => {
+          const selected = selectedEdgeIds.has(edge.id);
+          if ((edge.selected ?? false) === selected) return edge;
+          edgesChanged = true;
+          return { ...edge, selected };
+        });
+        if (!nodesChanged && !edgesChanged) return s;
+        return {
+          nodes: nodesChanged ? nodes : s.nodes,
+          edges: edgesChanged ? edges : s.edges,
+        };
+      });
     },
 
     saveSelection: async (name) => {

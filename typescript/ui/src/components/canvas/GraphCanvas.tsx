@@ -9,7 +9,7 @@
  * - Delete selected nodes via the Delete/Backspace key
  * - Enter subnetworks by clicking the ⤵ Enter button on NetworkNodes
  */
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ReactFlow,
   Background,
@@ -25,11 +25,11 @@ import {
   FinalConnectionState,
   BackgroundVariant,
   Node as FlowNode,
+  Edge as FlowEdge,
   NodeTypes,
   DefaultEdgeOptions,
   SelectionMode,
 } from '@xyflow/react';
-import { useState } from 'react';
 import { FunctionNode } from '../nodes/FunctionNode';
 import { NetworkNode } from '../nodes/NetworkNode';
 import { TunnelInputNode } from '../nodes/TunnelInputNode';
@@ -51,6 +51,83 @@ const nodeTypes: NodeTypes = {
   tunnelOutputNode: TunnelOutputNode as any,
   tunnelNode: TunnelInputNode as any,
 };
+
+// Selection commits to the pane store are debounced so high-frequency marquee
+// drags don't rebuild the entire nodes/edges arrays in the store on each
+// pointer move. The visual selection feedback stays live via React Flow's
+// internal state and our local copies.
+const SELECTION_COMMIT_DELAY_MS = 80;
+
+// Module-level constants so ReactFlow doesn't see new prop references every
+// render. New references on these props can invalidate internal memoization
+// inside ReactFlow during marquee drags.
+const PRO_OPTIONS = { hideAttribution: true } as const;
+const PAN_ON_DRAG: number[] = [0, 1, 2];
+const DEFAULT_EDGE_OPTIONS: DefaultEdgeOptions = {
+  style: { stroke: 'rgba(148, 163, 184, 0.5)', strokeWidth: 1.8 },
+  animated: false,
+};
+const CONNECTION_LINE_STYLE = { stroke: '#5eead4', strokeWidth: 1.8 } as const;
+const CONTROLS_STYLE = {
+  background: 'rgba(15, 23, 42, 0.85)',
+  border: '1px solid rgba(148, 163, 184, 0.14)',
+  borderRadius: 10,
+} as const;
+const MINIMAP_STYLE = {
+  background: 'rgba(2, 6, 23, 0.85)',
+  border: '1px solid rgba(148, 163, 184, 0.14)',
+  borderRadius: 10,
+} as const;
+const ACTIVE_EDGE_STYLE = { stroke: '#facc15', strokeWidth: 2.6 } as const;
+const IDLE_EDGE_STYLE = { stroke: 'rgba(148, 163, 184, 0.38)', strokeWidth: 1.6 } as const;
+const GROUP_BUTTON_ACTIVE_STYLE = { opacity: 1, cursor: 'pointer' } as const;
+const GROUP_BUTTON_INACTIVE_STYLE = { opacity: 0.45, cursor: 'not-allowed' } as const;
+
+// Compare nodes/edges arrays by their structural fields, ignoring `selected`.
+// Used to skip the store→local re-sync that runs after our debounced selection
+// commits — the local state already reflects the latest selection, so copying
+// the store's "newly committed" selection back into local state would only
+// trigger a redundant whole-canvas re-render.
+function nodesStructurallyEqual(
+  a: FlowNode<NodeData>[],
+  b: FlowNode<NodeData>[],
+): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const na = a[i];
+    const nb = b[i];
+    if (
+      na.id !== nb.id ||
+      na.type !== nb.type ||
+      na.position !== nb.position ||
+      na.data !== nb.data ||
+      na.deletable !== nb.deletable
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function edgesStructurallyEqual(a: FlowEdge[], b: FlowEdge[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const ea = a[i];
+    const eb = b[i];
+    if (
+      ea.id !== eb.id ||
+      ea.source !== eb.source ||
+      ea.target !== eb.target ||
+      ea.sourceHandle !== eb.sourceHandle ||
+      ea.targetHandle !== eb.targetHandle
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
 
 function eventPoint(event: MouseEvent | TouchEvent): { x: number; y: number } | null {
   if ('changedTouches' in event) {
@@ -80,22 +157,105 @@ function FlowCanvas() {
 
   // Local copy so ReactFlow can move nodes immediately without waiting for the server
   const [localNodes, setLocalNodes] = useState<FlowNode<NodeData>[]>(nodes);
-  const [localEdges, setLocalEdges] = useState(edges);
+  const [localEdges, setLocalEdges] = useState<FlowEdge[]>(edges);
+  const localNodesRef = useRef(localNodes);
+  const localEdgesRef = useRef(localEdges);
+  const selectionCommitTimerRef = useRef<number | null>(null);
+  const latestSelectionRef = useRef<{ nodeIds: string[]; edgeIds: string[] }>({
+    nodeIds: [],
+    edgeIds: [],
+  });
 
-  // Sync from store whenever remote state changes
-  useEffect(() => { setLocalNodes(nodes); }, [nodes]);
-  useEffect(() => { setLocalEdges(edges); }, [edges]);
+  // Track active node drags so we can hide the live MiniMap (which subscribes
+  // to React Flow's internal node store and would otherwise re-render on every
+  // pointer move during a drag).
+  const [isDraggingNodes, setIsDraggingNodes] = useState(false);
+  const handleNodeDragStart = useCallback(() => setIsDraggingNodes(true), []);
+  const handleNodeDragStop = useCallback(() => setIsDraggingNodes(false), []);
 
-  // Handle node moves locally; persist on drag end
+  // Selection-derived flags that the toolbar/inspector consume. We update
+  // them only when a `select` change actually fires, so a pure position drag
+  // does not re-render the surrounding UI.
+  const [hasGroupableSelection, setHasGroupableSelection] = useState(false);
+  const [primarySelectedNode, setPrimarySelectedNode] = useState<FlowNode<NodeData> | null>(null);
+
+  const refreshSelectionFlags = useCallback(
+    (nextNodes: FlowNode<NodeData>[]) => {
+      const groupable = nextNodes.some((n) => n.selected && n.deletable !== false);
+      setHasGroupableSelection((prev) => (prev === groupable ? prev : groupable));
+      const next = nextNodes.find((n) => n.selected) ?? null;
+      setPrimarySelectedNode((prev) => {
+        if (!next) return prev === null ? prev : null;
+        if (prev && prev.id === next.id && prev.data === next.data && prev.type === next.type) {
+          return prev;
+        }
+        return next;
+      });
+    },
+    [],
+  );
+
+  // Sync from store whenever remote state changes. Skip selection-only
+  // updates: when our debounced selection commit writes selection back into
+  // the pane store, it produces a new `nodes`/`edges` array reference but the
+  // structural fields are unchanged. Re-applying that reference here would
+  // re-render the entire canvas (and the MiniMap via React Flow's internal
+  // store) for no visible benefit, since our local state already shows the
+  // correct selection.
+  useEffect(() => {
+    if (nodesStructurallyEqual(localNodesRef.current, nodes)) return;
+    localNodesRef.current = nodes;
+    setLocalNodes(nodes);
+    refreshSelectionFlags(nodes);
+  }, [nodes, refreshSelectionFlags]);
+  useEffect(() => {
+    if (edgesStructurallyEqual(localEdgesRef.current, edges)) return;
+    localEdgesRef.current = edges;
+    setLocalEdges(edges);
+  }, [edges]);
+
+  const scheduleSelectionCommit = useCallback(
+    (nextNodes: FlowNode<NodeData>[], nextEdges: FlowEdge[]) => {
+      latestSelectionRef.current = {
+        nodeIds: nextNodes.filter((node) => node.selected).map((node) => node.id),
+        edgeIds: nextEdges.filter((edge) => edge.selected).map((edge) => edge.id),
+      };
+
+      if (selectionCommitTimerRef.current !== null) {
+        window.clearTimeout(selectionCommitTimerRef.current);
+      }
+
+      selectionCommitTimerRef.current = window.setTimeout(() => {
+        selectionCommitTimerRef.current = null;
+        const { nodeIds, edgeIds } = latestSelectionRef.current;
+        setSelection(nodeIds, edgeIds);
+      }, SELECTION_COMMIT_DELAY_MS);
+    },
+    [setSelection],
+  );
+
+  useEffect(
+    () => () => {
+      if (selectionCommitTimerRef.current !== null) {
+        window.clearTimeout(selectionCommitTimerRef.current);
+      }
+    },
+    [],
+  );
+
+  // Handle node changes locally; persist on drag end. We must apply every
+  // change (including per-frame `position` deltas while dragging) because
+  // React Flow runs in controlled mode and uses the prop value to drive the
+  // drag visuals — skipping per-frame updates makes drag feel laggy.
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
+      const hasSelectChange = changes.some((c) => c.type === 'select');
       setLocalNodes((ns) => {
         const nextNodes = applyNodeChanges(changes, ns) as FlowNode<NodeData>[];
-        if (changes.some((c) => c.type === 'select')) {
-          setSelection(
-            nextNodes.filter((node) => node.selected).map((node) => node.id),
-            localEdges.filter((edge) => edge.selected).map((edge) => edge.id),
-          );
+        localNodesRef.current = nextNodes;
+        if (hasSelectChange) {
+          scheduleSelectionCommit(nextNodes, localEdgesRef.current);
+          refreshSelectionFlags(nextNodes);
         }
         return nextNodes;
       });
@@ -105,23 +265,21 @@ function FlowCanvas() {
         }
       }
     },
-    [persistPosition, setSelection, localEdges],
+    [persistPosition, scheduleSelectionCommit, refreshSelectionFlags],
   );
 
   const handleEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
       setLocalEdges((es) => {
         const nextEdges = applyEdgeChanges(changes, es);
+        localEdgesRef.current = nextEdges;
         if (changes.some((c) => c.type === 'select')) {
-          setSelection(
-            localNodes.filter((node) => node.selected).map((node) => node.id),
-            nextEdges.filter((edge) => edge.selected).map((edge) => edge.id),
-          );
+          scheduleSelectionCommit(localNodesRef.current, nextEdges);
         }
         return nextEdges;
       });
     },
-    [setSelection, localNodes],
+    [scheduleSelectionCommit],
   );
 
   const handleConnect = useCallback(
@@ -157,26 +315,38 @@ function FlowCanvas() {
     [connectNewTunnelInputToTarget, connectToNewTunnelInput, connectToNewTunnelOutput],
   );
 
+  // We intentionally do NOT derive selectedNodes/selectedEdges/etc. from
+  // `localNodes` directly with `useMemo`, because `localNodes` gets a new
+  // reference on every drag frame (positions update). Re-deriving every frame
+  // would invalidate consumers (Controls buttons, ParameterPane, the
+  // wrapping `onKeyDown` listener) and cause a full subtree re-render.
+  // Instead, callbacks read the latest state from the refs at call-time, and
+  // selection-derived UI flags are tracked as separate state only updated on
+  // `select` changes.
   const handleHome = useCallback(() => {
-    const selected = localNodes.filter((n) => n.selected);
+    const selected = localNodesRef.current.filter((n) => n.selected);
     if (selected.length > 0) {
       fitView({ nodes: selected, padding: 0.35, duration: 350, maxZoom: 1.5 });
     } else {
       fitView({ padding: 0.1, duration: 350 });
     }
-  }, [localNodes, fitView]);
-
-  const groupableSelectedNodes = localNodes.filter((node) => node.selected && node.deletable !== false);
+  }, [fitView]);
 
   const handleGroupSelected = useCallback(() => {
-    if (groupableSelectedNodes.length === 0) return;
-    void groupNodes(groupableSelectedNodes.map((node) => node.id));
-  }, [groupNodes, groupableSelectedNodes]);
+    const groupable = localNodesRef.current.filter(
+      (n) => n.selected && n.deletable !== false,
+    );
+    if (groupable.length === 0) return;
+    void groupNodes(groupable.map((node) => node.id));
+  }, [groupNodes]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key.toLowerCase() === 'g' && e.metaKey) {
-        if (groupableSelectedNodes.length > 0) {
+        const groupable = localNodesRef.current.filter(
+          (n) => n.selected && n.deletable !== false,
+        );
+        if (groupable.length > 0) {
           e.preventDefault();
           e.stopPropagation();
           handleGroupSelected();
@@ -185,14 +355,16 @@ function FlowCanvas() {
       }
 
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        const selectedNodes = localNodes.filter((n) => n.selected && n.deletable !== false);
-        const selectedEdges = localEdges.filter((edge) => edge.selected);
-        if (selectedNodes.length > 0 || selectedEdges.length > 0) {
+        const sNodes = localNodesRef.current.filter(
+          (n) => n.selected && n.deletable !== false,
+        );
+        const sEdges = localEdgesRef.current.filter((edge) => edge.selected);
+        if (sNodes.length > 0 || sEdges.length > 0) {
           e.preventDefault();
           e.stopPropagation();
           void (async () => {
-            for (const edge of selectedEdges) await deleteEdge(edge.id);
-            for (const node of selectedNodes) await deleteNode(node.id);
+            for (const edge of sEdges) await deleteEdge(edge.id);
+            for (const node of sNodes) await deleteNode(node.id);
           })();
         }
       }
@@ -200,7 +372,7 @@ function FlowCanvas() {
         handleHome();
       }
     },
-    [localNodes, localEdges, deleteEdge, deleteNode, handleHome, handleGroupSelected, groupableSelectedNodes],
+    [deleteEdge, deleteNode, handleHome, handleGroupSelected],
   );
 
   // ── Palette callbacks ──────────────────────────────────────────────────────
@@ -244,18 +416,22 @@ function FlowCanvas() {
 
   // ── Selection → inspector ──────────────────────────────────────────────────
 
-  const selectedNode = localNodes.find((n) => n.selected) ?? null;
-  const selectedInfo: SelectedNodeInfo | null = selectedNode
-    ? {
-        id: selectedNode.id,
-        flowType: selectedNode.type ?? 'functionNode',
-        label: selectedNode.data.label,
-        inputs: selectedNode.data.inputs,
-        outputs: selectedNode.data.outputs,
-        isFlowControlNode: selectedNode.data.isFlowControlNode,
-        subnetworkId: selectedNode.data.subnetworkId,
-      }
-    : null;
+  // Built from the dedicated `primarySelectedNode` state so that the inspector
+  // is only rebuilt when selection or node data actually changes — not on
+  // every drag frame, which would otherwise force ParameterPane to re-render
+  // continuously.
+  const selectedInfo: SelectedNodeInfo | null = useMemo(() => {
+    if (!primarySelectedNode) return null;
+    return {
+      id: primarySelectedNode.id,
+      flowType: primarySelectedNode.type ?? 'functionNode',
+      label: primarySelectedNode.data.label,
+      inputs: primarySelectedNode.data.inputs,
+      outputs: primarySelectedNode.data.outputs,
+      isFlowControlNode: primarySelectedNode.data.isFlowControlNode,
+      subnetworkId: primarySelectedNode.data.subnetworkId,
+    };
+  }, [primarySelectedNode]);
 
   // ── Trace edge highlighting ────────────────────────────────────────────────
   // Serialize active edges to a stable string so this component only re-renders
@@ -286,15 +462,17 @@ function FlowCanvas() {
     return map;
   }, [nodeStateSerial]);
 
+  // Skip rebuilding edge objects entirely when no edges are highlighted. This
+  // preserves array + object identity across selection-only changes, which
+  // means React Flow's internal edge memoization can fully bail out.
   const highlightedEdges = useMemo(() => {
-    const activeSet = new Set(
-      activeEdgeSerial ? activeEdgeSerial.split('|') : [],
-    );
+    if (!activeEdgeSerial) return localEdges;
+    const activeSet = new Set(activeEdgeSerial.split('|'));
     return localEdges.map((edge) => {
       const isActive = activeSet.has(`${edge.source}:${edge.target}`);
       return isActive
-        ? { ...edge, animated: false, style: { ...edge.style, stroke: '#facc15', strokeWidth: 2.6 } }
-        : { ...edge, style: { ...edge.style, stroke: 'rgba(148, 163, 184, 0.38)', strokeWidth: 1.6 } };
+        ? { ...edge, animated: false, style: ACTIVE_EDGE_STYLE }
+        : { ...edge, style: IDLE_EDGE_STYLE };
     });
   }, [localEdges, activeEdgeSerial]);
 
@@ -322,6 +500,25 @@ function FlowCanvas() {
     wasRunningRef.current = isRunning;
   }, [isRunning, refreshNodes]);
 
+  // Stable nodeColor for the MiniMap. Only changes when trace node-state map
+  // changes, so the MiniMap doesn't see a fresh callback identity on every
+  // selection-driven render.
+  const minimapNodeColor = useCallback(
+    (n: FlowNode) => {
+      const state = nodeStateMap.get(n.id);
+      if (state === 'error') return '#f87171';
+      if (state === 'running' || state === 'pending') return '#facc15';
+      if (state === 'waiting') return '#a78bfa';
+      if (state === 'paused') return '#f97316';
+      if (state === 'done') return '#4ade80';
+      if (n.type === 'networkNode') return '#a78bfa';
+      if (n.type === 'tunnelInputNode') return '#22d3ee';
+      if (n.type === 'tunnelOutputNode') return '#f59e0b';
+      return '#5eead4';
+    },
+    [nodeStateMap],
+  );
+
   return (
     <div
       className="flex flex-1 overflow-hidden"
@@ -343,18 +540,20 @@ function FlowCanvas() {
           onEdgesChange={handleEdgesChange}
           onConnect={handleConnect}
           onConnectEnd={handleConnectEnd}
+          onNodeDragStart={handleNodeDragStart}
+          onNodeDragStop={handleNodeDragStop}
+          onSelectionDragStart={handleNodeDragStart}
+          onSelectionDragStop={handleNodeDragStop}
           deleteKeyCode={null}
           selectionOnDrag={false}
           selectionKeyCode="Shift"
           selectionMode={SelectionMode.Partial}
-          panOnDrag={[0, 1, 2]}
+          panOnDrag={PAN_ON_DRAG}
           fitView
-          proOptions={{ hideAttribution: true }}
-          defaultEdgeOptions={{
-            style: { stroke: 'rgba(148, 163, 184, 0.5)', strokeWidth: 1.8 },
-            animated: false,
-          } as DefaultEdgeOptions}
-          connectionLineStyle={{ stroke: '#5eead4', strokeWidth: 1.8 }}
+          onlyRenderVisibleElements
+          proOptions={PRO_OPTIONS}
+          defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
+          connectionLineStyle={CONNECTION_LINE_STYLE}
         >
           <Background
             color="rgba(148, 163, 184, 0.14)"
@@ -362,13 +561,7 @@ function FlowCanvas() {
             size={1.2}
             variant={BackgroundVariant.Dots}
           />
-          <Controls
-            style={{
-              background: 'rgba(15, 23, 42, 0.85)',
-              border: '1px solid rgba(148, 163, 184, 0.14)',
-              borderRadius: 10,
-            }}
-          >
+          <Controls style={CONTROLS_STYLE}>
             <ControlButton
               onClick={handleHome}
               title="Home — fit selected nodes (or all nodes if none selected)  [H]"
@@ -378,35 +571,19 @@ function FlowCanvas() {
             <ControlButton
               onClick={handleGroupSelected}
               title="Create subnetwork from selected nodes  [Cmd+G]"
-              style={{
-                opacity: groupableSelectedNodes.length > 0 ? 1 : 0.45,
-                cursor: groupableSelectedNodes.length > 0 ? 'pointer' : 'not-allowed',
-              }}
+              style={hasGroupableSelection ? GROUP_BUTTON_ACTIVE_STYLE : GROUP_BUTTON_INACTIVE_STYLE}
             >
               Group
             </ControlButton>
           </Controls>
-          <MiniMap
-            style={{
-              background: 'rgba(2, 6, 23, 0.85)',
-              border: '1px solid rgba(148, 163, 184, 0.14)',
-              borderRadius: 10,
-            }}
-            nodeColor={(n) => {
-              const state = nodeStateMap.get(n.id);
-              if (state === 'error') return '#f87171';
-              if (state === 'running' || state === 'pending') return '#facc15';
-              if (state === 'waiting') return '#a78bfa';
-              if (state === 'paused') return '#f97316';
-              if (state === 'done') return '#4ade80';
-              if (n.type === 'networkNode') return '#a78bfa';
-              if (n.type === 'tunnelInputNode') return '#22d3ee';
-              if (n.type === 'tunnelOutputNode') return '#f59e0b';
-              return '#5eead4';
-            }}
-            maskColor="rgba(2, 6, 23, 0.55)"
-            nodeStrokeColor="rgba(148, 163, 184, 0.3)"
-          />
+          {!isDraggingNodes && (
+            <MiniMap
+              style={MINIMAP_STYLE}
+              nodeColor={minimapNodeColor}
+              maskColor="rgba(2, 6, 23, 0.55)"
+              nodeStrokeColor="rgba(148, 163, 184, 0.3)"
+            />
+          )}
         </ReactFlow>
       </div>
 

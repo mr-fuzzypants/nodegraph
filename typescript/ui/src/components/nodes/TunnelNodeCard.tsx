@@ -343,17 +343,14 @@ function PortEditor({
   );
 }
 
-export function TunnelNodeCard({
-  id,
-  data,
-  selected,
-  mode,
-}: {
+type TunnelNodeCardProps = {
   id: string;
   data: NodeData;
   selected: boolean;
   mode: 'input' | 'output';
-}) {
+};
+
+function TunnelNodeCardComponent({ id, data, selected, mode }: TunnelNodeCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [cardHovered, setCardHovered] = useState(false);
@@ -435,3 +432,13 @@ export function TunnelNodeCard({
     </div>
   );
 }
+
+export const TunnelNodeCard = React.memo(
+  TunnelNodeCardComponent,
+  (prev, next) =>
+    prev.id === next.id &&
+    prev.mode === next.mode &&
+    prev.selected === next.selected &&
+    prev.data === next.data,
+);
+TunnelNodeCard.displayName = 'TunnelNodeCard';
