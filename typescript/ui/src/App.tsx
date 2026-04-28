@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { SplitManager } from './components/canvas/SplitManager';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { SplitManager, type SplitActions } from './components/canvas/SplitManager';
 import { InfoPanel } from './components/canvas/InfoPanel';
 import { useGraphStore } from './store/graphStore';
 import { useTraceSocket } from './hooks/useTraceSocket';
@@ -10,56 +10,116 @@ import { Button } from './components/ui/button';
 import { ThemeToggle } from './components/ThemeToggle';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { WorkflowSquare10Icon, PlayIcon, PauseIcon } from '@hugeicons/core-free-icons';
+import {
+  Menu,
+  Modal,
+  TextInput,
+  UnstyledButton,
+  Button as MantineButton,
+  Group as MantineGroup,
+  Stack,
+} from '@mantine/core';
+import { useDisclosure } from '@mantine/hooks';
+
+/** Matches InfoPanel `Tabs` tab label typography (Info / Console). */
+const menuBarTriggerStyle: React.CSSProperties = {
+  fontFamily: 'var(--mantine-font-family)',
+  fontSize: 'var(--mantine-font-size-xs)',
+  fontWeight: 650,
+  color: 'var(--foreground)',
+  height: 28,
+  paddingInline: 12,
+  borderRadius: 4,
+  display: 'flex',
+  alignItems: 'center',
+};
+
+const MENU_TRIGGER_CLASS =
+  'transition-colors hover:bg-slate-800/90 data-[expanded=true]:bg-slate-800';
 
 function AppMenu({
   onSaveSelection,
+  onGroupNodes,
+  splitActions,
 }: {
   onSaveSelection: () => void;
+  onGroupNodes: () => void;
+  splitActions: SplitActions | null;
 }) {
-  const [openMenu, setOpenMenu] = useState<'file' | 'edit' | null>(null);
-
-  const menuButtonClass = 'h-6 px-2 rounded text-xs font-sans text-slate-300 hover:bg-slate-800';
-  const itemClass = 'block w-full text-left px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-800';
-
   return (
-    <nav className="relative flex items-center gap-1" onMouseLeave={() => setOpenMenu(null)}>
-      <div className="relative">
-        <button
-          className={menuButtonClass}
-          onClick={() => setOpenMenu(openMenu === 'file' ? null : 'file')}
-        >
-          File
-        </button>
-        {openMenu === 'file' && (
-          <div className="absolute left-0 top-7 min-w-40 rounded border border-border bg-sidebar shadow-lg py-1 z-50">
-            <button
-              className={itemClass}
-              onClick={() => {
-                setOpenMenu(null);
-                onSaveSelection();
-              }}
-            >
-              Save Selection
-            </button>
-          </div>
-        )}
-      </div>
+    <nav className="relative flex items-center gap-6">
+      <Menu
+        trigger="click-hover"
+        openDelay={0}
+        closeDelay={120}
+        position="bottom-start"
+        offset={4}
+        withinPortal
+        shadow="md"
+      >
+        <Menu.Target>
+          <UnstyledButton className={MENU_TRIGGER_CLASS} style={menuBarTriggerStyle}>
+            File
+          </UnstyledButton>
+        </Menu.Target>
+        <Menu.Dropdown>
+          <Menu.Item onClick={onSaveSelection}>Save Selection…</Menu.Item>
+        </Menu.Dropdown>
+      </Menu>
 
-      <div className="relative">
-        <button
-          className={menuButtonClass}
-          onClick={() => setOpenMenu(openMenu === 'edit' ? null : 'edit')}
-        >
-          Edit
-        </button>
-        {openMenu === 'edit' && (
-          <div className="absolute left-0 top-7 min-w-32 rounded border border-border bg-sidebar shadow-lg py-1 z-50">
-            <button className={`${itemClass} opacity-50 cursor-not-allowed`} disabled>
-              No actions yet
-            </button>
-          </div>
-        )}
-      </div>
+      <Menu
+        trigger="click-hover"
+        openDelay={0}
+        closeDelay={120}
+        position="bottom-start"
+        offset={4}
+        withinPortal
+        shadow="md"
+      >
+        <Menu.Target>
+          <UnstyledButton className={MENU_TRIGGER_CLASS} style={menuBarTriggerStyle}>
+            Edit
+          </UnstyledButton>
+        </Menu.Target>
+        <Menu.Dropdown>
+          <Menu.Item
+            onClick={onGroupNodes}
+            rightSection={<span className="text-[10px] opacity-60">⌘G</span>}
+          >
+            Group Nodes
+          </Menu.Item>
+        </Menu.Dropdown>
+      </Menu>
+
+      <Menu
+        trigger="click-hover"
+        openDelay={0}
+        closeDelay={120}
+        position="bottom-start"
+        offset={4}
+        withinPortal
+        shadow="md"
+      >
+        <Menu.Target>
+          <UnstyledButton className={MENU_TRIGGER_CLASS} style={menuBarTriggerStyle}>
+            Window
+          </UnstyledButton>
+        </Menu.Target>
+        <Menu.Dropdown>
+          <Menu.Item
+            disabled={!splitActions}
+            onClick={() => splitActions?.splitRight()}
+          >
+            Split Right
+          </Menu.Item>
+          <Menu.Item
+            disabled={!splitActions}
+            onClick={() => splitActions?.splitDown()}
+          >
+            Split Vertical
+          </Menu.Item>
+        </Menu.Dropdown>
+      </Menu>
     </nav>
   );
 }
@@ -82,7 +142,14 @@ export default function App() {
     isPaused:        s.isPaused,
   }));
   const [activePaneStore, setActivePaneStore] = useState<PaneStore | null>(null);
+  const [splitActions, setSplitActions] = useState<SplitActions | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+
+  // Save-selection modal state
+  const [saveModalOpened, { open: openSaveModal, close: closeSaveModal }] =
+    useDisclosure(false);
+  const [saveName, setSaveName] = useState('selection');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     init();
@@ -92,6 +159,10 @@ export default function App() {
     setActivePaneStore(store);
   }, []);
 
+  const handleSplitActionsChange = useCallback((actions: SplitActions) => {
+    setSplitActions(actions);
+  }, []);
+
   const handleSaveSelection = useCallback(() => {
     if (!activePaneStore) {
       setError('No active graph pane to save from.');
@@ -99,25 +170,61 @@ export default function App() {
     }
 
     const paneState = activePaneStore.getState();
-    const selectedCount = paneState.nodes.filter((node) => node.selected && node.deletable !== false).length;
+    const selectedCount = paneState.nodes.filter(
+      (node) => node.selected && node.deletable !== false,
+    ).length;
     if (selectedCount === 0) {
       setError('Select at least one node before saving a selection.');
       return;
     }
 
-    const name = window.prompt('Save selected nodes as:', 'selection');
-    const trimmedName = name?.trim();
+    setSaveName('selection');
+    openSaveModal();
+  }, [activePaneStore, openSaveModal, setError]);
+
+  const handleConfirmSave = useCallback(() => {
+    if (!activePaneStore) return;
+    const trimmedName = saveName.trim();
     if (!trimmedName) return;
 
-    paneState.saveSelection(trimmedName)
+    const paneState = activePaneStore.getState();
+    setSaving(true);
+    paneState
+      .saveSelection(trimmedName)
       .then(() => {
         setSaveMessage(`Saved selection "${trimmedName}"`);
         window.setTimeout(() => setSaveMessage(null), 3000);
+        closeSaveModal();
       })
       .catch((err) => {
-        setError(err?.response?.data?.detail ?? err?.message ?? 'Failed to save selection.');
+        setError(
+          err?.response?.data?.detail ??
+            err?.message ??
+            'Failed to save selection.',
+        );
+      })
+      .finally(() => {
+        setSaving(false);
       });
+  }, [activePaneStore, saveName, closeSaveModal, setError]);
+
+  const handleGroupNodes = useCallback(() => {
+    if (!activePaneStore) {
+      setError('No active graph pane.');
+      return;
+    }
+    const paneState = activePaneStore.getState();
+    const groupable = paneState.nodes.filter(
+      (n) => n.selected && n.deletable !== false,
+    );
+    if (groupable.length === 0) {
+      setError('Select at least one node before grouping.');
+      return;
+    }
+    void paneState.groupNodes(groupable.map((node) => node.id));
   }, [activePaneStore, setError]);
+
+  const saveModalTitle = useMemo(() => 'Save Selection', []);
 
   return (
     <div className="flex flex-col w-screen h-screen bg-background text-foreground">
@@ -133,7 +240,11 @@ export default function App() {
 
         <div className="w-px h-4 bg-border mx-1" />
 
-        <AppMenu onSaveSelection={handleSaveSelection} />
+        <AppMenu
+          onSaveSelection={handleSaveSelection}
+          onGroupNodes={handleGroupNodes}
+          splitActions={splitActions}
+        />
 
         <div className="w-px h-4 bg-border mx-1" />
 
@@ -189,9 +300,50 @@ export default function App() {
 
       {/* Main canvas area — SplitManager owns all panes */}
       <div className="flex flex-col flex-1 overflow-hidden min-h-0">
-        <SplitManager onActivePaneChange={handleActivePaneChange} />
+        <SplitManager
+          onActivePaneChange={handleActivePaneChange}
+          onActionsChange={handleSplitActionsChange}
+        />
         <InfoPanel />
       </div>
+
+      {/* Save Selection modal */}
+      <Modal
+        opened={saveModalOpened}
+        onClose={closeSaveModal}
+        title={saveModalTitle}
+        centered
+        size="sm"
+        overlayProps={{ backgroundOpacity: 0.55, blur: 2 }}
+      >
+        <Stack gap="sm">
+          <TextInput
+            label="Save selection as"
+            placeholder="selection"
+            value={saveName}
+            onChange={(event) => setSaveName(event.currentTarget.value)}
+            data-autofocus
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                handleConfirmSave();
+              }
+            }}
+          />
+          <MantineGroup justify="flex-end" gap="xs">
+            <MantineButton variant="subtle" onClick={closeSaveModal} disabled={saving}>
+              Cancel
+            </MantineButton>
+            <MantineButton
+              onClick={handleConfirmSave}
+              loading={saving}
+              disabled={!saveName.trim()}
+            >
+              Save
+            </MantineButton>
+          </MantineGroup>
+        </Stack>
+      </Modal>
     </div>
   );
 }

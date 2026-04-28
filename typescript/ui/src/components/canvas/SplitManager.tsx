@@ -2,7 +2,7 @@
  * SplitManager — manages a row (or column) of independent graph panes.
  *
  * Features:
- * - Split horizontally or vertically via toolbar buttons
+ * - Split horizontally or vertically (driven externally via `onActionsChange`)
  * - Drag the divider between any two panes to resize them
  * - Close individual panes (minimum one pane always retained)
  * - Each pane navigates the graph independently
@@ -20,47 +20,15 @@ interface PaneEntry {
 
 type Orientation = 'h' | 'v';
 
+export interface SplitActions {
+  /** Add a new pane to the right (horizontal layout). */
+  splitRight: () => void;
+  /** Add a new pane below (vertical layout). */
+  splitDown: () => void;
+}
+
 const RESIZER_PX = 4;
 const MIN_PCT = 8; // minimum pane size in %
-
-// ── Toolbar ────────────────────────────────────────────────────────────────────
-
-function ToolbarBtn({
-  onClick,
-  title,
-  children,
-}: {
-  onClick: () => void;
-  title: string;
-  children: React.ReactNode;
-}) {
-  const [hov, setHov] = useState(false);
-  return (
-    <button
-      onClick={onClick}
-      title={title}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        background: hov ? '#1e2133' : 'none',
-        border: '1px solid #2c2f45',
-        borderRadius: 4,
-        color: '#9ea3c0',
-        cursor: 'pointer',
-        fontFamily: 'monospace',
-        fontSize: 11,
-        padding: '2px 8px',
-        lineHeight: 1.6,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 4,
-        transition: 'background 0.1s',
-      }}
-    >
-      {children}
-    </button>
-  );
-}
 
 // ── Resizer handle ─────────────────────────────────────────────────────────────
 
@@ -96,8 +64,10 @@ function Resizer({
 
 export function SplitManager({
   onActivePaneChange,
+  onActionsChange,
 }: {
   onActivePaneChange?: (store: PaneStore | null) => void;
+  onActionsChange?: (actions: SplitActions) => void;
 }) {
   // Initialise with one pane
   const [panes, setPanes] = useState<PaneEntry[]>(() => [
@@ -122,12 +92,18 @@ export function SplitManager({
 
   // ── Pane management ──────────────────────────────────────────────────────────
 
-  const splitPane = useCallback(() => {
-    const newEntry: PaneEntry = { id: crypto.randomUUID(), store: createPaneStore() };
-    setPanes((prev) => [...prev, newEntry]);
-    // Give each pane equal weight
+  const addPane = useCallback((nextOrientation: Orientation) => {
+    setOrientation(nextOrientation);
+    setPanes((prev) => [...prev, { id: crypto.randomUUID(), store: createPaneStore() }]);
     setSizes((prev) => Array(prev.length + 1).fill(1));
   }, []);
+
+  const splitRight = useCallback(() => addPane('h'), [addPane]);
+  const splitDown = useCallback(() => addPane('v'), [addPane]);
+
+  useEffect(() => {
+    onActionsChange?.({ splitRight, splitDown });
+  }, [onActionsChange, splitRight, splitDown]);
 
   const closePane = useCallback((id: string) => {
     setPanes((prev) => {
@@ -144,10 +120,6 @@ export function SplitManager({
       });
       return next;
     });
-  }, []);
-
-  const flipOrientation = useCallback(() => {
-    setOrientation((o) => (o === 'h' ? 'v' : 'h'));
   }, []);
 
   // ── Resizing ─────────────────────────────────────────────────────────────────
@@ -199,109 +171,46 @@ export function SplitManager({
 
   return (
     <div
+      ref={containerRef}
       style={{
         display: 'flex',
-        flexDirection: 'column',
+        flexDirection: isH ? 'row' : 'column',
         flex: 1,
         overflow: 'hidden',
         minWidth: 0,
         minHeight: 0,
       }}
     >
-      {/* Global toolbar */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          padding: '4px 12px',
-          background: '#11111b',
-          borderBottom: '1px solid #2c2f45',
-          flexShrink: 0,
-          height: 32,
-        }}
-      >
-        <span
-          style={{
-            fontFamily: 'monospace',
-            fontSize: 11,
-            color: '#585b70',
-            marginRight: 4,
-            letterSpacing: 0.5,
-          }}
-        >
-          Panes
-        </span>
+      {panes.map((pane, idx) => (
+        <React.Fragment key={pane.id}>
+          <div
+            style={{
+              flex: sizes[idx] ?? 1,
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              minWidth: 0,
+              minHeight: 0,
+              borderRight: isH && idx < panes.length - 1 ? 'none' : undefined,
+            }}
+          >
+            <GraphPane
+              store={pane.store}
+              paneIndex={idx}
+              onClose={panes.length > 1 ? () => closePane(pane.id) : undefined}
+              onActivate={() => onActivePaneChange?.(pane.store)}
+            />
+          </div>
 
-        <ToolbarBtn
-          onClick={splitPane}
-          title={`Split ${isH ? 'right' : 'down'} — add a new pane`}
-        >
-          {isH ? '⊞ Split Right' : '⊟ Split Down'}
-        </ToolbarBtn>
-
-        <ToolbarBtn
-          onClick={flipOrientation}
-          title="Toggle split orientation"
-        >
-          {isH ? '↕ Horizontal' : '↔ Vertical'}
-        </ToolbarBtn>
-
-        <span
-          style={{
-            marginLeft: 'auto',
-            fontFamily: 'monospace',
-            fontSize: 10,
-            color: '#535677',
-          }}
-        >
-          {panes.length} {panes.length === 1 ? 'pane' : 'panes'}
-        </span>
-      </div>
-
-      {/* Panes + resizers */}
-      <div
-        ref={containerRef}
-        style={{
-          display: 'flex',
-          flexDirection: isH ? 'row' : 'column',
-          flex: 1,
-          overflow: 'hidden',
-          minWidth: 0,
-          minHeight: 0,
-        }}
-      >
-        {panes.map((pane, idx) => (
-          <React.Fragment key={pane.id}>
-            <div
-              style={{
-                flex: sizes[idx] ?? 1,
-                overflow: 'hidden',
-                display: 'flex',
-                flexDirection: 'column',
-                minWidth: 0,
-                minHeight: 0,
-                borderRight: isH && idx < panes.length - 1 ? 'none' : undefined,
-              }}
-            >
-              <GraphPane
-                store={pane.store}
-                paneIndex={idx}
-                onClose={panes.length > 1 ? () => closePane(pane.id) : undefined}
-                onActivate={() => onActivePaneChange?.(pane.store)}
-              />
-            </div>
-
-            {/* Resizer between panes */}
-            {idx < panes.length - 1 && (
-              <Resizer
-                orientation={orientation}
-                onDragStart={handleResizerMouseDown(idx)}
-              />
-            )}
-          </React.Fragment>
-        ))}
-      </div>
+          {/* Resizer between panes */}
+          {idx < panes.length - 1 && (
+            <Resizer
+              orientation={orientation}
+              onDragStart={handleResizerMouseDown(idx)}
+            />
+          )}
+        </React.Fragment>
+      ))}
     </div>
   );
 }
