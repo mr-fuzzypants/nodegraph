@@ -330,27 +330,37 @@ function OutputRow({ port, expanded }: { port: SerializedPort; expanded: boolean
 // ── Image thumbnail ──────────────────────────────────────────────────────────
 
 function ImageThumbnail({
-  url, revisedPrompt, isGenerating, prompt,
+  url, revisedPrompt, isGenerating, prompt, keepPreviousUrlWhileGenerating = false,
 }: {
   url?: string;
   revisedPrompt?: string;
   isGenerating: boolean;
   prompt?: string;
+  keepPreviousUrlWhileGenerating?: boolean;
 }) {
   const [imgState, setImgState] = useState<'loading' | 'loaded' | 'error'>('loading');
+  const [lastUrl, setLastUrl] = useState<string | undefined>(undefined);
+  const [previewHeight, setPreviewHeight] = useState<number | undefined>(undefined);
   const prevUrlRef = useRef<string | undefined>(undefined);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const displayUrl = url ?? (keepPreviousUrlWhileGenerating && isGenerating ? lastUrl : undefined);
+
+  useEffect(() => {
+    if (url) setLastUrl(url);
+  }, [url]);
+
   // Reset load state whenever url changes
-  if (url !== prevUrlRef.current) {
-    prevUrlRef.current = url;
-    if (url) setImgState('loading');
+  if (displayUrl !== prevUrlRef.current) {
+    prevUrlRef.current = displayUrl;
+    if (displayUrl) setImgState('loading');
   }
 
-  if (!isGenerating && !url) return null;
+  if (!isGenerating && !displayUrl) return null;
 
   return (
     <div style={{ borderTop: `1px solid ${CV.border}`, background: CV.header }}>
       {/* Placeholder shown while computing and no url yet */}
-      {isGenerating && !url && (
+      {isGenerating && !displayUrl && (
         <div style={{ padding: 10 }}>
           <div style={{
             width: '100%', height: 140, borderRadius: 6,
@@ -374,7 +384,7 @@ function ImageThumbnail({
         </div>
       )}
       {/* Real image */}
-      {url && (
+      {displayUrl && (
         <div style={{ padding: 8 }}>
           {imgState === 'error' ? (
             <div style={{ color: CV.muted, fontSize: 11, textAlign: 'center', padding: '8px 0', fontFamily: 'ui-monospace, monospace' }}>
@@ -383,14 +393,21 @@ function ImageThumbnail({
           ) : (
             <>
               {imgState === 'loading' && (
-                <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: CV.muted, fontSize: 11, fontFamily: 'ui-monospace, monospace' }}>
+                <div style={{ height: previewHeight ?? 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: CV.muted, fontSize: 11, fontFamily: 'ui-monospace, monospace' }}>
                   ⏳ loading…
                 </div>
               )}
               <img
-                src={url}
+                ref={imgRef}
+                src={displayUrl}
                 alt={revisedPrompt ?? 'Generated image'}
-                onLoad={() => setImgState('loaded')}
+                onLoad={() => {
+                  setImgState('loaded');
+                  requestAnimationFrame(() => {
+                    const height = imgRef.current?.getBoundingClientRect().height;
+                    if (height && height > 0) setPreviewHeight(height);
+                  });
+                }}
                 onError={() => setImgState('error')}
                 style={{ display: imgState === 'loaded' ? 'block' : 'none', width: '100%', objectFit: 'contain', borderRadius: 6, border: `1px solid ${CV.border}` }}
               />
@@ -728,10 +745,21 @@ export function FunctionNode({ id, data, selected }: NodeProps<Node<NodeData>>) 
     data.nodeType === 'TiledKSampler';
   const samplerProgress = typeof traceInfo?.progress === 'number' ? traceInfo.progress : undefined;
   const samplerMessage = traceInfo?.progressMessage || traceInfo?.statusMessage;
+  const [lastSamplerProgress, setLastSamplerProgress] = useState<number | undefined>(undefined);
+  const [lastSamplerMessage, setLastSamplerMessage] = useState<string | undefined>(undefined);
   const isRunning = traceInfo?.state === 'running';
   const hasError = traceInfo?.state === 'error';
   const visualState = getNodeVisualState(traceInfo, selected);
   const actionsVisible = cardHovered || selected || expanded || isRunning || hasError;
+
+  useEffect(() => {
+    if (!isDiffusionSampler || samplerProgress === undefined) return;
+    setLastSamplerProgress(samplerProgress);
+    setLastSamplerMessage(samplerMessage);
+  }, [isDiffusionSampler, samplerMessage, samplerProgress]);
+
+  const visibleSamplerProgress = samplerProgress ?? lastSamplerProgress;
+  const visibleSamplerMessage = samplerMessage ?? lastSamplerMessage;
 
   return (
     <div
@@ -775,8 +803,8 @@ export function FunctionNode({ id, data, selected }: NodeProps<Node<NodeData>>) 
           {traceInfo && traceInfo.state === 'running' && (
             <StatusBadge state="running" label="running" />
           )}
-          {isDiffusionSampler && samplerProgress !== undefined && (
-            <StatusBadge state="pending" label={`${Math.round(samplerProgress * 100)}%`} title={samplerMessage} />
+          {isDiffusionSampler && visibleSamplerProgress !== undefined && (
+            <StatusBadge state="pending" label={`${Math.round(visibleSamplerProgress * 100)}%`} title={visibleSamplerMessage} />
           )}
           {traceInfo && traceInfo.state === 'paused' && (
             <StatusBadge state="paused" label="paused" />
@@ -814,8 +842,8 @@ export function FunctionNode({ id, data, selected }: NodeProps<Node<NodeData>>) 
           </button>
         </div>
 
-        {isDiffusionSampler && samplerProgress !== undefined && (
-          <HeaderProgress progress={samplerProgress} message={samplerMessage} accent={ACCENT} />
+        {isDiffusionSampler && visibleSamplerProgress !== undefined && (
+          <HeaderProgress progress={visibleSamplerProgress} message={visibleSamplerMessage} accent={ACCENT} />
         )}
 
         {/* Ports */}
@@ -859,6 +887,7 @@ export function FunctionNode({ id, data, selected }: NodeProps<Node<NodeData>>) 
             revisedPrompt={traceInfo?.detail?.revised_prompt as string | undefined}
             isGenerating={isGenerating}
             prompt={promptValue}
+            keepPreviousUrlWhileGenerating={isVaeDecode}
           />
         )}
 
