@@ -40,11 +40,11 @@ app = modal.App("ksampler-demo")
 image = (
     modal.Image.debian_slim(python_version="3.11")
     .pip_install(
-        "torch==2.3.1",
-        "torchvision==0.18.1",
-        "diffusers==0.29.2",
-        "transformers>=4.41.0",
-        "accelerate>=0.30.0",
+        "torch==2.4.1",
+        "torchvision==0.19.1",
+        "diffusers==0.31.0",
+        "transformers==4.44.2",
+        "accelerate>=0.33.0",
         "safetensors>=0.4.3",
         "Pillow>=10.3.0",
     )
