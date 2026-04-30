@@ -18,6 +18,8 @@ Nodes registered here:
     VAEEncode
     LoadImage
     SaveImage
+    ReferenceLatent
+    ResizeImage
 
 Minimum viable txt2img wiring
 ──────────────────────────────
@@ -40,6 +42,8 @@ from .VAEDecodeNode          import VAEDecodeNode
 from .VAEEncodeNode          import VAEEncodeNode
 from .LoadImageNode          import LoadImageNode
 from .SaveImageNode          import SaveImageNode
+from .ReferenceLatentNode    import ReferenceLatentNode
+from .ResizeImageNode        import ResizeImageNode
 
 __all__ = [
     "CheckpointLoaderNode",
@@ -52,4 +56,6 @@ __all__ = [
     "VAEEncodeNode",
     "LoadImageNode",
     "SaveImageNode",
+    "ReferenceLatentNode",
+    "ResizeImageNode",
 ]

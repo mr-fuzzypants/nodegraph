@@ -1223,6 +1223,132 @@ class GraphState:
         self.positions[st_final_decode.id]   = {"x": 1060, "y": 360}
         self.positions[st_final_save.id]     = {"x": 1400, "y": 360}
 
+        # ── ReferenceGuidedDemo ───────────────────────────────────────────────
+        # Reference-guided txt2img pipeline using the three new imaging nodes:
+        #
+        #   LoadImage   — load a reference image from disk (with inline preview)
+        #   ResizeImage — normalise it to the target resolution (Lanczos filter)
+        #   ReferenceLatent — annotate the positive CLIP conditioning with the
+        #                     encoded reference latent so the sampler can use it
+        #                     for style / structure guidance
+        #
+        # Full linear exec chain:
+        #
+        #   CheckpointLoader
+        #     └─next─► LoadImage ─next─► ResizeImage ─next─► VAEEncode
+        #                                                         └─next─► CLIPTextEncode(pos)
+        #                                                                      └─next─► CLIPTextEncode(neg)
+        #                                                                                   └─next─► ReferenceLatent
+        #                                                                                                └─next─► EmptyLatentImage
+        #                                                                                                             └─next─► KSampler
+        #                                                                                                                          └─next─► VAEDecode
+        #                                                                                                                                       └─next─► SaveImage
+        #
+        # Data wiring:
+        #   CheckpointLoader.MODEL  ──► KSampler.MODEL
+        #   CheckpointLoader.CLIP   ──► CLIPTextEncode(pos/neg).CLIP
+        #   CheckpointLoader.VAE    ──► VAEEncode.VAE  and  VAEDecode.VAE
+        #   LoadImage.IMAGE         ──► ResizeImage.image
+        #   ResizeImage.IMAGE       ──► VAEEncode.pixels
+        #   VAEEncode.LATENT        ──► ReferenceLatent.latent
+        #   CLIPTextEncode(pos).CONDITIONING ──► ReferenceLatent.conditioning
+        #   ReferenceLatent.CONDITIONING     ──► KSampler.positive
+        #   CLIPTextEncode(neg).CONDITIONING ──► KSampler.negative
+        #   EmptyLatentImage.LATENT ──► KSampler.latent_image
+        #   KSampler.LATENT         ──► VAEDecode.samples
+        #   VAEDecode.IMAGE         ──► SaveImage.images
+        #
+        new_node_types = {"LoadImage", "ResizeImage", "ReferenceLatent", "VAEEncode"}
+        if not new_node_types.issubset(Node._node_registry):
+            missing = ", ".join(sorted(new_node_types.difference(Node._node_registry)))
+            print(f"[demo] ReferenceGuidedDemo skipped; missing node types: {missing}")
+        else:
+            rg_net = net.createNetwork("ReferenceGuidedDemo", "NodeNetworkSystem")
+            self.all_networks[rg_net.id] = rg_net
+
+            rg_loader   = rg_net.createNode("Checkpoint",    "CheckpointLoader")
+            rg_load_img = rg_net.createNode("LoadRef",       "LoadImage")
+            rg_resize   = rg_net.createNode("ResizeRef",     "ResizeImage")
+            rg_vae_enc  = rg_net.createNode("EncodeRef",     "VAEEncode")
+            rg_pos      = rg_net.createNode("PositivePrompt","CLIPTextEncode")
+            rg_neg      = rg_net.createNode("NegativePrompt","CLIPTextEncode")
+            rg_ref      = rg_net.createNode("RefLatent",     "ReferenceLatent")
+            rg_latent   = rg_net.createNode("EmptyLatent",   "EmptyLatentImage")
+            rg_sample   = rg_net.createNode("KSampler",      "KSampler")
+            rg_decode   = rg_net.createNode("Decode",        "VAEDecode")
+            rg_save     = rg_net.createNode("SaveImage",     "SaveImage")
+
+            # ── Default values ────────────────────────────────────────────────
+            # Point these at real paths before executing; they are placeholders
+            # so the demo graph is immediately visible and inspectable in the UI.
+            rg_loader.inputs["ckpt_path"].value   = "/Users/robertpringle/development/ai_models/sd-1.5/"
+            rg_load_img.inputs["image_path"].value = "/path/to/reference.png"
+            rg_resize.inputs["width"].value        = 512
+            rg_resize.inputs["height"].value       = 512
+            rg_resize.inputs["interpolation"].value = "lanczos"
+            rg_pos.inputs["text"].value = "a futuristic city at golden hour, cinematic lighting, 8k"
+            rg_neg.inputs["text"].value = "blurry, low quality, watermark, distorted, overexposed"
+            rg_latent.inputs["width"].value      = 512
+            rg_latent.inputs["height"].value     = 512
+            rg_latent.inputs["batch_size"].value = 1
+            rg_sample.inputs["seed"].value         = 42
+            rg_sample.inputs["steps"].value        = 25
+            rg_sample.inputs["cfg"].value          = 7.5
+            rg_sample.inputs["sampler_name"].value = "euler"
+            rg_sample.inputs["scheduler"].value    = "karras"
+            rg_sample.inputs["denoise"].value      = 1.0
+            rg_save.inputs["filename_prefix"].value = "ref_guided"
+            rg_save.inputs["output_dir"].value      = "./output"
+
+            # ── Control-flow (exec) chain ─────────────────────────────────────
+            graph.add_edge(rg_loader.id,   "next", rg_load_img.id, "exec")
+            graph.add_edge(rg_load_img.id, "next", rg_resize.id,   "exec")
+            graph.add_edge(rg_resize.id,   "next", rg_vae_enc.id,  "exec")
+            graph.add_edge(rg_vae_enc.id,  "next", rg_pos.id,      "exec")
+            graph.add_edge(rg_pos.id,      "next", rg_neg.id,      "exec")
+            graph.add_edge(rg_neg.id,      "next", rg_ref.id,      "exec")
+            graph.add_edge(rg_ref.id,      "next", rg_latent.id,   "exec")
+            graph.add_edge(rg_latent.id,   "next", rg_sample.id,   "exec")
+            graph.add_edge(rg_sample.id,   "next", rg_decode.id,   "exec")
+            graph.add_edge(rg_decode.id,   "next", rg_save.id,     "exec")
+
+            # ── Data wiring ───────────────────────────────────────────────────
+            # Model components from the checkpoint
+            graph.add_edge(rg_loader.id,  "MODEL", rg_sample.id,  "MODEL")
+            graph.add_edge(rg_loader.id,  "CLIP",  rg_pos.id,     "CLIP")
+            graph.add_edge(rg_loader.id,  "CLIP",  rg_neg.id,     "CLIP")
+            graph.add_edge(rg_loader.id,  "VAE",   rg_vae_enc.id, "VAE")
+            graph.add_edge(rg_loader.id,  "VAE",   rg_decode.id,  "VAE")
+            # Reference image pipeline: load → resize → encode → annotate
+            graph.add_edge(rg_load_img.id, "IMAGE",        rg_resize.id,  "image")
+            graph.add_edge(rg_resize.id,   "IMAGE",        rg_vae_enc.id, "pixels")
+            graph.add_edge(rg_vae_enc.id,  "LATENT",       rg_ref.id,     "latent")
+            # Text conditioning annotated with the reference latent
+            graph.add_edge(rg_pos.id,      "CONDITIONING", rg_ref.id,     "conditioning")
+            graph.add_edge(rg_ref.id,      "CONDITIONING", rg_sample.id,  "positive")
+            graph.add_edge(rg_neg.id,      "CONDITIONING", rg_sample.id,  "negative")
+            # Sampling and decoding
+            graph.add_edge(rg_latent.id,   "LATENT",       rg_sample.id,  "latent_image")
+            graph.add_edge(rg_sample.id,   "LATENT",       rg_decode.id,  "samples")
+            graph.add_edge(rg_decode.id,   "IMAGE",        rg_save.id,    "images")
+
+            # ── Layout ────────────────────────────────────────────────────────
+            # Arranged left-to-right following the exec chain.
+            # The reference arm (load→resize→encode→reflatent) runs across the
+            # top row; prompts and sampler sit in the middle; save at the right.
+            self.positions[rg_net.id]    = {"x": 9780, "y": 180}
+            self.positions[rg_loader.id]   = {"x": 80,   "y": 340}
+            self.positions[rg_load_img.id] = {"x": 380,  "y": 80}
+            self.positions[rg_resize.id]   = {"x": 720,  "y": 80}
+            self.positions[rg_vae_enc.id]  = {"x": 1060, "y": 80}
+            self.positions[rg_pos.id]      = {"x": 380,  "y": 340}
+            self.positions[rg_neg.id]      = {"x": 380,  "y": 520}
+            self.positions[rg_ref.id]      = {"x": 1060, "y": 280}
+            self.positions[rg_latent.id]   = {"x": 720,  "y": 520}
+            self.positions[rg_sample.id]   = {"x": 1400, "y": 340}
+            self.positions[rg_decode.id]   = {"x": 1740, "y": 340}
+            self.positions[rg_save.id]     = {"x": 2080, "y": 340}
+
     # ── Network helpers ──────────────────────────────────────────────────────
 
     def get_network(self, network_id: str) -> Optional[NodeNetwork]:

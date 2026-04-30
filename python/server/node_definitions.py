@@ -849,7 +849,8 @@ except ImportError as _agent_err:
 
 # ── Imaging / diffusion pipeline node types ───────────────────────────────────
 # Registers CheckpointLoader, CLIPTextEncode, EmptyLatentImage, KSampler,
-# VAEDecode, VAEEncode, LoadImage, SaveImage.
+# KSamplerStep, TiledKSampler, VAEDecode, VAEEncode, LoadImage, SaveImage,
+# ReferenceLatent, ResizeImage.
 # Skipped gracefully when torch / diffusers are not installed.
 try:
     import nodegraph.python.noderegistry.imaging  # noqa: F401
