@@ -874,7 +874,10 @@ function FunctionNodeComponent({ id, data, selected }: NodeProps<Node<NodeData>>
   // Image thumbnail — for nodes that emit an image preview URL in trace detail.
   const isImageGen = data.nodeType === 'ImageGenNode' || data.nodeType === 'ImageGenExecNode';
   const isVaeDecode = data.nodeType === 'VAEDecode';
-  const hasImagePreview = isImageGen || isVaeDecode;
+  // LoadImage and ResizeImage report the same trace detail URL as VAEDecode,
+  // so opt them into the shared thumbnail renderer.
+  const isImageUtility = data.nodeType === 'LoadImage' || data.nodeType === 'ResizeImage';
+  const hasImagePreview = isImageGen || isVaeDecode || isImageUtility;
   const imageUrl   = typeof traceInfo?.detail?.url === 'string' ? traceInfo.detail.url || undefined : undefined;
   const isGenerating = hasImagePreview && (traceInfo?.state === 'running' || traceInfo?.state === 'pending');
   const promptValue  = inputs.find((p) => p.name === 'prompt')?.value as string | undefined;

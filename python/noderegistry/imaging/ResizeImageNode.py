@@ -154,8 +154,8 @@ def _resize_image(image: Any, width: int, height: int, resample) -> Any:
     * Float tensors/arrays are assumed to be in [0, 1].  They are multiplied
       by 255 before conversion to uint8 PIL and divided by 255 on the way back
       to preserve the normalised range.
-    * Batch dimension (dim-0 size > 1) is not supported: only the first frame
-      ``image[0]`` is processed and returned as a single-frame result.
+    * Batched image tensors/arrays resize the first frame and preserve the
+      input rank by returning a single-frame batch.
     * Channel-first tensors (C, H, W) are transposed to (H, W, C) before PIL
       conversion and transposed back afterward.
     """
@@ -168,15 +168,13 @@ def _resize_image(image: Any, width: int, height: int, resample) -> Any:
 
     # ── Tensor / array path ──────────────────────────────────────────────────
     # Detach from autograd graph if necessary (PyTorch tensors).
+    is_torch = hasattr(image, "detach") and hasattr(image, "to")
+    torch_device = getattr(image, "device", None)
     arr = image
     if hasattr(arr, "detach"):
         arr = arr.detach()
     if hasattr(arr, "cpu"):
         arr = arr.cpu()
-
-    # Determine whether we received a torch tensor so we can return the same
-    # type and device at the end.
-    is_torch = hasattr(arr, "numpy") and not hasattr(arr, "tolist")
 
     # Convert to numpy for unified processing.
     if hasattr(arr, "numpy"):
@@ -187,7 +185,11 @@ def _resize_image(image: Any, width: int, height: int, resample) -> Any:
 
     import numpy as np
 
-    # Handle optional batch dimension: (B, H, W, C) → use first frame.
+    # Handle optional batch dimension: resize the first frame and re-add the
+    # batch axis before returning so VAEEncode still receives (B, H, W, C).
+    # Without this, ResizeImage can turn LoadImage's torch batch into an
+    # unbatched ndarray, which breaks backends that expect a tensor batch.
+    had_batch = arr.ndim == 4
     if arr.ndim == 4:
         arr = arr[0]
 
@@ -225,10 +227,18 @@ def _resize_image(image: Any, width: int, height: int, resample) -> Any:
     if channel_first:
         arr_resized = arr_resized.transpose(2, 0, 1)
 
+    if had_batch:
+        arr_resized = arr_resized[np.newaxis, ...]
+
     # Return a torch tensor if the input was a torch tensor.
     if is_torch:
         import torch
-        return torch.from_numpy(arr_resized)
+        tensor = torch.from_numpy(arr_resized)
+        if torch_device is not None:
+            # Preserve the original tensor device so downstream VAE encoding
+            # does not receive an unexpected CPU tensor after resize.
+            tensor = tensor.to(device=torch_device)
+        return tensor
 
     return arr_resized
 

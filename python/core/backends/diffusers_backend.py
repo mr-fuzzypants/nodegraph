@@ -110,6 +110,48 @@ class DiffusersBackend:
             _patch_torch_xpu(self._torch)
         return self._torch
 
+    def _image_to_bchw_tensor(self, image: Any) -> Any:
+        """
+        Coerce common IMAGE representations to torch (B, C, H, W).
+
+        Nodes generally pass torch (B, H, W, C), but resize/preview utilities
+        may produce NumPy arrays or unbatched HWC values. Accepting those here
+        keeps VAEEncode robust at the backend boundary.
+        """
+        torch = self._get_torch()
+        x = image
+
+        # PIL images do not expose tensor shape helpers; normalize them first
+        # into the same float RGB range used by LoadImage.
+        if hasattr(x, "save"):
+            np = _require("numpy", "numpy")
+            x = np.array(x.convert("RGB")).astype("float32") / 255.0
+
+        # NumPy arrays and nested lists do not support torch.permute(), so
+        # convert every non-tensor input before layout normalization.
+        if not torch.is_tensor(x):
+            x = torch.as_tensor(x)
+
+        # VAE encode expects a batch axis. Accept single images from utilities
+        # and promote HWC/CHW to NHWC/NCHW.
+        if x.ndim == 3:
+            x = x.unsqueeze(0)
+
+        if x.ndim != 4:
+            raise ValueError(f"VAE image input must be 3D or 4D, got shape {tuple(x.shape)}")
+
+        # Convert NHWC to NCHW. Leave already-channel-first tensors alone.
+        # Alpha channels are discarded because the Stable Diffusion VAE encodes
+        # RGB pixels.
+        if x.shape[-1] in (1, 3, 4):
+            x = x[..., :3].permute(0, 3, 1, 2)
+        elif x.shape[1] in (1, 3, 4):
+            x = x[:, :3, :, :]
+        else:
+            raise ValueError(f"VAE image input must have 1, 3, or 4 channels, got shape {tuple(x.shape)}")
+
+        return x.to(dtype=self._torch_dtype(), device=self._device)
+
     # ── Model loading ────────────────────────────────────────────────────────
 
     def load_checkpoint(self, path: str) -> tuple[Any, Any, Any]:
@@ -394,8 +436,7 @@ class DiffusersBackend:
     def encode_vae(self, vae_handle: Any, image: Any) -> dict:
         torch = self._get_torch()
         vae   = vae_handle["vae"]
-        # image expected as (B, H, W, C) float32 in [0, 1]
-        x = image.permute(0, 3, 1, 2).to(dtype=self._torch_dtype(), device=self._device)
+        x = self._image_to_bchw_tensor(image)
         x = 2.0 * x - 1.0
         with torch.no_grad():
             latent = vae.encode(x).latent_dist.sample() * 0.18215
