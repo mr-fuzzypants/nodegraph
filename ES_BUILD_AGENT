@@ -1,0 +1,309 @@
+# ES Build Agent
+
+## Goal
+
+Embed an AI chat window in the NodeGraph UI that can take a natural-language task, propose or build a graph, apply graph mutations through the existing API, and optionally execute the resulting network.
+
+Example task:
+
+> Build me a diffusion network that writes out a file.
+
+The desired result is not only a text response. The assistant should create concrete NodeGraph nodes, wire their ports, set required parameter values, save the graph when requested, and expose enough progress/errors for the user to review or intervene.
+
+## Current Foundation
+
+The codebase already has most of the low-level graph-editing primitives.
+
+- `typescript/ui/src/api/graphClient.ts` exposes REST calls for creating nodes, connecting edges, setting port values, creating subnetworks, saving selections, and executing a node.
+- `typescript/ui/src/store/paneStore.ts` wraps those API calls for the active React Flow pane and refreshes the visual graph after mutations.
+- `python/server/routes/graph_routes.py` provides the corresponding FastAPI routes under `/api`.
+- `python/server/state.py` owns the in-memory graph, network index, layout positions, and mutation helpers.
+- `python/server/serializers/graph_serializer.py` defines the UI wire shape for networks, nodes, ports, and edges.
+- `python/core/AgentExecutor.py` and `python/noderegistry/AgentNodes.py` already explore LLM-backed execution and planning concepts.
+- Imaging nodes such as `CheckpointLoader`, `CLIPTextEncode`, `EmptyLatentImage`, `KSampler`, `VAEDecode`, and `SaveImage` already exist and are seeded into sampler demos.
+
+The missing layer is an application-level "build agent" that safely turns chat intent into graph operations.
+
+## What Is Missing
+
+### 1. Chat UI Surface
+
+Add an embedded chat panel to the React app. The best fit is either a docked pane beside `SplitManager` or a tab in/near `InfoPanel`.
+
+Needed pieces:
+
+- `BuildAgentPanel` component with message history, input box, send/cancel buttons, progress state, and error display.
+- A small Zustand store, for example `buildAgentStore.ts`, to track messages, active request id, proposed graph operations, applied operations, and pending confirmations.
+- Access to the active pane's `currentNetworkId` so user prompts apply to the network the user is looking at.
+- A way for the agent to request refreshes through the pane store after server-side graph changes.
+- Optional controls for "plan only", "apply after approval", and "apply automatically".
+
+### 2. Frontend API Client
+
+Add a separate API client around the build-agent endpoints instead of overloading `graphClient`.
+
+Suggested file:
+
+- `typescript/ui/src/api/buildAgentClient.ts`
+
+Suggested methods:
+
+- `sendMessage(sessionId, networkId, message, mode)`
+- `applyPlan(sessionId, planId)`
+- `cancelRun(sessionId)`
+- `getSession(sessionId)`
+
+The current `graphClient` is graph CRUD oriented. The build agent needs session-oriented calls with chat messages, planning state, and streamed progress.
+
+### 3. Server Build-Agent Routes
+
+Create a dedicated FastAPI route module, for example:
+
+- `python/server/routes/build_agent_routes.py`
+
+Mount it from `python/server/main.py` under `/api/build-agent`.
+
+Minimum routes:
+
+- `POST /api/build-agent/sessions` to create or resume a chat session.
+- `POST /api/build-agent/sessions/{session_id}/messages` to submit a user message.
+- `POST /api/build-agent/sessions/{session_id}/plans/{plan_id}/apply` to apply a proposed mutation plan.
+- `POST /api/build-agent/sessions/{session_id}/cancel` for long-running model calls or graph execution.
+
+The route should not let the model mutate global graph state directly. It should call a validated orchestration service.
+
+### 4. Build-Agent Orchestration Service
+
+Add a Python service that owns the agent loop and graph mutation contract.
+
+Suggested file:
+
+- `python/server/build_agent/service.py`
+
+Responsibilities:
+
+- Build a compact context packet from the current network.
+- Include available node type metadata, ports, value types, and known constraints.
+- Ask the LLM for a structured graph plan.
+- Validate every requested node, port, value, and edge before mutation.
+- Apply accepted operations through `GraphState` helper methods.
+- Return a transcript-friendly summary plus machine-readable operations.
+
+The service should produce structured operations, not arbitrary Python code.
+
+Suggested operation schema:
+
+```json
+{
+  "operations": [
+    {
+      "op": "create_node",
+      "client_ref": "sampler",
+      "type": "KSampler",
+      "name": "KSampler",
+      "position": { "x": 720, "y": 240 }
+    },
+    {
+      "op": "set_port_value",
+      "node_ref": "sampler",
+      "port": "steps",
+      "value": 12
+    },
+    {
+      "op": "connect",
+      "source_ref": "sampler",
+      "source_port": "LATENT",
+      "target_ref": "decode",
+      "target_port": "samples"
+    }
+  ]
+}
+```
+
+Use client refs so a single model response can create nodes and then refer to them in later operations before real node ids exist.
+
+### 5. Node Type Introspection
+
+`GET /api/node-types` currently returns only names. A build agent needs detailed capabilities.
+
+Add an endpoint such as:
+
+- `GET /api/node-types/catalog`
+
+Each node type should include:
+
+- Type name.
+- Category.
+- Input ports with `name`, `function`, `valueType`, default value, and whether the value is required.
+- Output ports with `name`, `function`, and `valueType`.
+- Whether dynamic ports are supported.
+- Known enum/range constraints where available.
+- Short description.
+
+This can be built by instantiating registered node classes in a safe temporary context and serializing their ports, similar to the existing planning/introspection work in `AgentExecutor`.
+
+### 6. Validation Before Mutation
+
+The graph currently accepts many low-level mutations directly. An AI builder needs stricter preflight checks because model output is untrusted.
+
+Add validation for:
+
+- Node type exists in `Node._node_registry`.
+- Node belongs to the target network before mutation.
+- Source and target ports exist.
+- Source port is an output and target port is an input, except for explicit tunnel semantics.
+- Control ports connect only to control ports and data ports connect only to compatible data ports.
+- Values match the target port `ValueType`.
+- Required diffusion parameters exist before execution.
+- File output paths are limited to allowed directories.
+- Plans are bounded by max operation count and max created node count.
+
+This should live in the build-agent service or a reusable `graph_validation.py` module, not in the React UI.
+
+### 7. Bulk Graph Mutation Endpoint
+
+The existing API can create one node or edge at a time. That works, but a build agent needs atomic plan application.
+
+Add a bulk mutation route, either inside graph routes or build-agent routes:
+
+- `POST /api/networks/{network_id}/operations/validate`
+- `POST /api/networks/{network_id}/operations/apply`
+
+The apply endpoint should:
+
+- Validate the whole plan first.
+- Apply operations in order only after validation succeeds.
+- Return the refreshed serialized network.
+- Return operation-level errors with enough detail for the chat UI to explain what failed.
+
+For an initial implementation, in-memory rollback can be done by snapshotting `root_network.to_dict()` and `positions` before applying the plan, then restoring on failure.
+
+### 8. Conversation Memory and Sessions
+
+The chat window needs session state separate from graph state.
+
+Track:
+
+- Session id.
+- Target network id.
+- Chat messages.
+- Pending plan ids.
+- Applied operation history.
+- Last execution run id, if the user asks to run the graph.
+
+In-memory storage is enough for a first version. Persisting sessions can come later, but graph changes should continue to use the existing save/load JSON path.
+
+### 9. Streaming and Observability
+
+The app already has trace infrastructure for execution. The build agent needs similar progress events for planning and applying mutations.
+
+Options:
+
+- Reuse the existing Socket.IO trace channel with new event types such as `BUILD_AGENT_MESSAGE`, `BUILD_AGENT_PLAN`, `BUILD_AGENT_OPERATION`, and `BUILD_AGENT_ERROR`.
+- Or add a dedicated build-agent stream endpoint.
+
+The UI should show:
+
+- Model text as it streams.
+- Proposed operations before apply.
+- Applied operations with success/failure.
+- Links or buttons to focus created nodes.
+- Execution trace if the agent runs the finished graph.
+
+### 10. Human Approval and Safety
+
+Do not default to silent graph mutation for large or risky plans.
+
+Recommended modes:
+
+- `plan`: answer with a proposed graph and operation list only.
+- `apply`: validate and apply after the user confirms.
+- `auto`: apply directly for low-risk small changes.
+
+Require confirmation for:
+
+- File writes.
+- Model downloads or expensive diffusion runs.
+- More than a small number of node creations.
+- Any operation outside the current network.
+- Any output path outside configured project output directories.
+
+### 11. Diffusion Task Template
+
+The repo already has a working diffusion topology in `GraphState._seed_sampler_demos`. The build agent should know this as a reusable recipe.
+
+For "build me a diffusion network that writes out a file", the planned topology should be:
+
+```text
+CheckpointLoader.next -> CLIPTextEncode(positive).exec
+CheckpointLoader.next -> CLIPTextEncode(negative).exec
+CheckpointLoader.next -> EmptyLatentImage.exec
+CLIPTextEncode(positive).next -> KSampler.exec
+KSampler.next -> VAEDecode.exec
+VAEDecode.next -> SaveImage.exec
+
+CheckpointLoader.MODEL -> KSampler.MODEL
+CheckpointLoader.CLIP -> positive.CLIP
+CheckpointLoader.CLIP -> negative.CLIP
+CheckpointLoader.VAE -> VAEDecode.VAE
+positive.CONDITIONING -> KSampler.positive
+negative.CONDITIONING -> KSampler.negative
+EmptyLatentImage.LATENT -> KSampler.latent_image
+KSampler.LATENT -> VAEDecode.samples
+VAEDecode.IMAGE -> SaveImage.images
+```
+
+Required parameter defaults:
+
+- `CheckpointLoader.ckpt_path`: configured by user or environment.
+- Positive prompt: taken from the chat request or a follow-up question.
+- Negative prompt: safe default such as `blurry, low quality, distorted`.
+- Latent width/height/batch size.
+- Sampler seed, steps, cfg, sampler name, scheduler, denoise.
+- `SaveImage.filename_prefix`.
+- `SaveImage.output_dir`: constrained to an allowed output directory.
+
+If the checkpoint path is unknown, the agent should ask a follow-up question or use a configured default. It should not hallucinate a local model path.
+
+## Suggested Implementation Order
+
+1. Add node type catalog endpoint.
+2. Add graph operation schemas and validation.
+3. Add bulk validate/apply endpoint.
+4. Add build-agent service that can return a structured plan without mutating.
+5. Add chat UI panel and build-agent client.
+6. Wire approval flow from chat UI to plan apply.
+7. Add streaming/progress events.
+8. Add saved recipes for common tasks, starting with diffusion file output.
+9. Add execution integration so the agent can run the final graph after approval.
+10. Add persistence for chat sessions if needed.
+
+## Testing Plan
+
+Backend tests:
+
+- Catalog endpoint returns ports for core, agent, and imaging node types.
+- Invalid node type, missing port, wrong port direction, and incompatible value type are rejected.
+- Bulk apply succeeds for a small arithmetic graph.
+- Bulk apply succeeds for the diffusion file-output plan when imaging nodes are registered.
+- Bulk apply rolls back on mid-plan failure.
+- Output paths are constrained to allowed directories.
+
+Frontend tests:
+
+- Chat panel can send a message and render assistant responses.
+- Pending plans render operation previews.
+- Confirming a plan refreshes the active pane.
+- Failed validation shows actionable errors.
+- Cancel disables the active request and leaves the graph unchanged.
+
+Manual scenarios:
+
+- Ask for a small math graph and inspect the created nodes.
+- Ask for a diffusion graph and confirm that the topology matches the sampler demo.
+- Ask for a file output path outside the allowed directory and verify confirmation or rejection.
+- Ask the agent to run the graph and verify execution trace events remain visible.
+
+## Key Design Rule
+
+The AI chat should be allowed to propose graph changes, but only validated NodeGraph operations should touch `GraphState`. Keep the model behind a schema, a validator, and an approval boundary.
